@@ -1,6 +1,6 @@
 {
-  "name": "ctnet",
-  "version": "0.1.0",
+  "name": "@mazeballs/ctnet-experimental",
+  "version": "0.1.0-alpha.1",
   "description": "A library for simulating continuous-time dynamical networks",
   "license": "Apache-2.0",
   "main": "dist/ctnet.js",
@@ -42,6 +42,9 @@
   "author": "Mazeballs Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mazeballs/continuous-time-networks"
+    "url": "https://github.com/danbri/mazeballs"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
