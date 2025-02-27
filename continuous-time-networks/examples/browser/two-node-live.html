@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CTRNN Debugging</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
+</head>
+<body>
+  <h1>CTRNN Debugging - 2-Node Oscillator</h1>
+  <p id="status">Initializing...</p>
+  <div id="debug"></div>
+  <canvas id="plotCanvas" width="800" height="400" style="border:1px solid #000000;"></canvas>
+
+  <script>
+    (function (global) {
+      const tf = global.tf;
+
+      const ctNet = function (spec) {
+        if (!spec) spec = {};
+        if (typeof spec === "number") spec = { size: spec };
+
+        const size = spec.size || 3;
+
+        const net = {
+          size: size,
+          weights: tf.tensor2d(spec.init_weights || tf.randomUniform([size, size], -1, 1).arraySync()),
+          biases: tf.tensor1d(spec.biases || tf.zeros([size]).arraySync()),
+          taus: tf.ones([size]),
+          gains: tf.ones([size]),
+          states: tf.tensor1d(spec.states || tf.zeros([size]).arraySync()),
+          outputs: tf.zeros([size]),
+          ext_inputs: tf.zeros([size]),
+          step_size: spec.step_size || 0.1,
+          learning_rate: spec.learning_rate || 0.01,
+          run_duration: spec.run_duration || 1000,
+          name: spec.name || "CTRNN"
+        };
+
+        net.squash = function (x) {
+          return tf.sigmoid(x);
+        };
+
+        net.eulerStep = function () {
+          return tf.tidy(() => {
+            const reshaped_outputs = net.outputs.expandDims(1);
+            const total_inputs = net.weights.matMul(reshaped_outputs).add(net.ext_inputs.expandDims(1));
+            const yprime = total_inputs.squeeze().sub(net.states);
+            const delta = yprime.mul(tf.scalar(net.step_size)).div(net.taus);
+            const new_states = net.states.add(delta);
+            const new_outputs = net.squash(new_states.add(net.biases).mul(net.gains));
+            return { states: new_states, outputs: new_outputs };
+          });
+        };
+
+        net.runSimulation = async function* () {
+          for (let i = 0; i < net.run_duration; i++) {
+            const { states, outputs } = net.eulerStep();
+            net.states = states;
+            net.outputs = outputs;
+
+            const states_cpu = await states.data();
+            const outputs_cpu = await outputs.data();
+
+            yield { step: i, states: states_cpu, outputs: outputs_cpu };
+          }
+        };
+
+        return net;
+      };
+
+      async function runCTRNN() {
+        const debugDiv = document.getElementById('debug');
+        const statusEl = document.getElementById('status');
+
+        // Create and initialize the network with your oscillator definition
+        const net = ctNet({
+          size: 2,
+          init_weights: [
+            [4.5, 1],
+            [-1, 4.5]
+          ],
+          biases: [-2.75, -1.75],
+          states: [2, 3],
+          run_duration: 1000,
+          step_size: 1,
+          name: "Simple 2-Node Oscillator"
+        });
+
+        statusEl.textContent = `${net.name} Running...`;
+
+        debugDiv.textContent = "Step: 0";
+
+        const canvas = document.getElementById('plotCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const maxPoints = 500;
+        const buffer = [];
+
+        function drawGraph(data) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const width = canvas.width;
+          const height = canvas.height;
+
+          const colors = ['red', 'blue'];
+          const numNeurons = data[0].length;
+
+          for (let n = 0; n < numNeurons; n++) {
+            ctx.beginPath();
+            ctx.strokeStyle = colors[n % colors.length];
+            data.forEach((point, i) => {
+              const x = (i / maxPoints) * width;
+              const y = height - (point[n] * height);
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+          }
+        }
+
+        for await (const state of net.runSimulation()) {
+          // Display current step and outputs in the debug div
+          debugDiv.textContent = `Step: ${state.step}, Outputs: ${state.outputs.map(o => o.toFixed(3)).join(', ')}`;
+
+          // Add outputs to buffer for visualization
+          buffer.push(state.outputs);
+          if (buffer.length > maxPoints) buffer.shift();
+
+          // Draw the graph
+          drawGraph(buffer);
+
+          // Wait for the next animation frame
+          await new Promise(requestAnimationFrame);
+        }
+
+        statusEl.textContent = `${net.name} Simulation Complete!`;
+      }
+
+      runCTRNN().catch(err => {
+        document.getElementById('status').textContent = `Error: ${err.message}`;
+        console.error(err);
+      });
+    })(typeof window !== "undefined" ? window : global);
+  </script>
+</body>
+</html>
