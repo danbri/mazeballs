@@ -5,9 +5,10 @@
  * Based on the simple-node-demo.js implementation in the js/ directory
  */
 
-const ctNet = require('../ctnet-library/src/ctNet');
+const { CTNet } = require('../../src/index.js');
 const fs = require('fs');
 const path = require('path');
+const tf = require('@tensorflow/tfjs');
 
 // Define sparkify function for creating sparklines
 const sparkify = pc => '▁▂▃▄▅▆▇█'.split('')[Math.floor((pc / 12.5))];
@@ -27,7 +28,7 @@ const colorMap = [colors.blue, colors.red, colors.green, colors.yellow, colors.c
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-let netDefPath = '../examples/netdefs/working_oscillator.json';
+let netDefPath = '../../networks/examples/working_oscillator.json';
 let steps = 1000;
 let frameDelay = 50;
 let displayWidth = 80; // Default display width
@@ -48,7 +49,7 @@ for (let i = 0; i < args.length; i++) {
     i++;
   } else if (args[i] === '--list') {
     // List available networks
-    const netdefsDir = path.resolve(__dirname, '../examples/netdefs');
+    const netdefsDir = path.resolve(__dirname, '../../networks/examples');
     const files = fs.readdirSync(netdefsDir);
     console.log("Available network definitions:");
     files.forEach(file => {
@@ -68,15 +69,15 @@ for (let i = 0; i < args.length; i++) {
 Usage: node term-sparklines.js [options]
 
 Options:
-  --net PATH      Path to network definition JSON file (default: ../examples/netdefs/oscillatory_2node.json)
-  --steps NUM     Number of simulation steps (default: 100)
-  --delay NUM     Animation frame delay in ms (default: 100)
+  --net PATH      Path to network definition JSON file (default: ../../networks/examples/working_oscillator.json)
+  --steps NUM     Number of simulation steps (default: 1000)
+  --delay NUM     Animation frame delay in ms (default: 50)
   --width NUM     Display width for sparklines (default: 80)
   --list          List available network definitions
   --help          Show this help message
 
 Examples:
-  node term-sparklines.js --net ../examples/netdefs/oscillatory_4node.json --steps 200
+  node term-sparklines.js --net ../../networks/examples/oscillatory_4node.json --steps 200
   node term-sparklines.js --delay 50 --width 60
   node term-sparklines.js --list
 `);
@@ -111,17 +112,22 @@ async function loadNetworkDefinition(filePath) {
 
 async function main() {
   try {
+    // Initialize TensorFlow.js first
+    await tf.ready();
+    console.log("TensorFlow.js initialized with backend:", tf.getBackend());
+    
     console.log("Loading network definition...");
     const networkDef = await loadNetworkDefinition(netDefPath);
     
     console.log("Creating continuous time network...");
-    const myNet = ctNet(networkDef);
+    const myNet = CTNet(networkDef);
     console.log(`Created network with size=${myNet.size}, name="${myNet.name}"`);
     
     console.log(`\nRunning simulation for ${steps} steps...`);
     
     // Run simulation
-    const simulation = await myNet.runSimulation(myNet, { run_duration: steps });
+    myNet.run_duration = steps;
+    const simulation = myNet.runSimulation();
     
     // Store all activations (limited to actual number of steps)
     const allActivations = Array(myNet.size).fill().map(() => []);

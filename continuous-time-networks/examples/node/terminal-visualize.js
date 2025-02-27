@@ -6,8 +6,11 @@
  * CTNet activity in a terminal environment
  */
 
-const ctNet = require('../ctnet-library/src/ctNet');
-const { generateSparklines, displaySparklines, animateSparklines, INK } = require('../ctnet-library/src/terminal-sparklines');
+const { CTNet } = require('../../src/index.js');
+const tf = require('@tensorflow/tfjs');
+// Terminal sparklines functionality is missing in the new structure
+// You'll need to copy the terminal-sparklines.js file from the old project
+const { generateSparklines, displaySparklines, animateSparklines, INK } = require('./term-sparklines.js');
 
 // Try to load chalk for terminal colors if available
 let chalk;
@@ -19,10 +22,14 @@ try {
 }
 
 async function main() {
+  // Initialize TensorFlow.js first
+  await tf.ready();
+  console.log("TensorFlow.js initialized with backend:", tf.getBackend());
+
   console.log("CTNet Terminal Visualization");
   
   // Create a 2-node oscillator network (Beer, 1995 parameters)
-  const net = ctNet({
+  const net = CTNet({
     size: 2,
     init_weights: [
       [4.5, 1],
@@ -36,7 +43,8 @@ async function main() {
   console.log(`Network: ${net.name} (${net.size} nodes)`);
   
   // Run a simulation for 100 timesteps
-  const simulation = await net.runSimulation(net, { run_duration: 100 });
+  net.run_duration = 100;
+  const simulation = net.runSimulation();
   
   // Generate sparklines from the simulation
   const sparklines = await generateSparklines(net, simulation, { steps: 100 });

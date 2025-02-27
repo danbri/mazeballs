@@ -4,13 +4,24 @@
  * Simple script to check that network loading is working
  */
 
-const ctNet = require('../ctnet-library/src/ctNet');
+const { CTNet } = require("../../src/index.js");
 const fs = require('fs');
 const path = require('path');
+const tf = require('@tensorflow/tfjs');
+
+// Initialize TensorFlow.js
+async function setupTensorFlow() {
+  // Make sure TensorFlow is ready before proceeding
+  await tf.ready();
+  console.log("TensorFlow.js initialized with backend:", tf.getBackend());
+}
 
 async function main() {
   try {
-    const filePath = '../examples/netdefs/working_oscillator.json';
+    // Initialize TensorFlow.js first
+    await setupTensorFlow();
+    
+    const filePath = '../../networks/examples/working_oscillator.json';
     console.log(`Loading network from ${filePath}...`);
     
     // Load network definition
@@ -24,7 +35,7 @@ async function main() {
     
     // Create network
     console.log("Creating network...");
-    const myNet = ctNet(networkDef);
+    const myNet = CTNet(networkDef);
     
     // Check network properties
     console.log("Network properties:");
@@ -38,7 +49,7 @@ async function main() {
     console.log("\nDirect network setup test:");
     
     // Try direct setup without JSON
-    const directNet = ctNet({
+    const directNet = CTNet({
       size: 2,
       init_weights: [
         [4.5, 1.0],

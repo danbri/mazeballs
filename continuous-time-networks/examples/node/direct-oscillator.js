@@ -4,7 +4,7 @@
  * Direct oscillator setup with manual parameter setting
  */
 
-const ctNet = require('../ctnet-library/src/ctNet');
+const { CTNet } = require('../../src/index.js');
 const fs = require('fs');
 const path = require('path');
 const tf = require('@tensorflow/tfjs');
@@ -104,12 +104,14 @@ async function main() {
     }
     
     console.log("Setting up TensorFlow backend...");
+    // First, ensure TensorFlow is ready
+    await tf.ready();
     const activeBackend = await setupTensorFlowBackend(preferredBackend);
     
     console.log("\nCreating oscillator network manually...");
     
     // Create network with basic parameters
-    const myNet = ctNet({
+    const myNet = CTNet({
       size: 2,
       init_weights: [
         [4.5, 1],

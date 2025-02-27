@@ -18,7 +18,7 @@ try {
   canvas = null;
 }
 
-const ctNet = require('../ctnet-library/src/ctNet');
+const { CTNet } = require('../../src/index.js');
 const tf = require('@tensorflow/tfjs');
 
 // Parameters (matching the Python code)
@@ -28,10 +28,14 @@ const step_size = 0.01;
 
 async function main() {
   try {
+    // Initialize TensorFlow.js first
+    await tf.ready();
+    console.log("TensorFlow.js initialized with backend:", tf.getBackend());
+    
     console.log("Creating oscillator network from Python port...");
     
     // Set up network (matching Python structure)
-    const network = ctNet({
+    const network = CTNet({
       size: net_size,
       init_weights: [
         [4.5, 1],

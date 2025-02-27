@@ -6,11 +6,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const ctNet = require('../ctnet-library/src/ctNet');
+const { CTNet } = require('../../src/index.js');
+const tf = require('@tensorflow/tfjs');
 
 // Handle command line args
 const args = process.argv.slice(2);
-let netdefPath = '../examples/netdefs/netdef_2c.json';
+let netdefPath = '../../networks/examples/netdef_2c.json';
 let steps = 10;
 
 if (args.length > 0) {
@@ -26,11 +27,11 @@ if (args.includes('--help')) {
 Usage: node load-netdef.js [netdef_path] [steps]
 
 Arguments:
-  netdef_path   Path to network definition JSON file (default: ../examples/netdefs/netdef_2c.json)
+  netdef_path   Path to network definition JSON file (default: ../../networks/examples/netdef_2c.json)
   steps         Number of simulation steps to run (default: 10)
 
 Example:
-  node load-netdef.js ../examples/netdefs/netdef_4b.json 20
+  node load-netdef.js ../../networks/examples/netdef_4b.json 20
   `);
   process.exit(0);
 }
@@ -38,13 +39,17 @@ Example:
 // Load and run the network
 async function main() {
   try {
+    // Initialize TensorFlow.js first
+    await tf.ready();
+    console.log("TensorFlow.js initialized with backend:", tf.getBackend());
+    
     // Load network definition
     const fullPath = path.resolve(__dirname, netdefPath);
     console.log(`Loading network definition from ${fullPath}`);
     const networkDef = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
     
     // Create network
-    const net = ctNet(networkDef);
+    const net = CTNet(networkDef);
     console.log(`Created network: "${net.name}" with ${net.size} nodes`);
     console.log(`Network properties:`);
     console.log(`- Weights: ${net.weights.arraySync().map(row => '[' + row.join(', ') + ']').join('\n            ')}`);
@@ -54,7 +59,8 @@ async function main() {
     
     // Run simulation
     console.log(`\nRunning simulation for ${steps} steps...`);
-    const simulation = await net.runSimulation(net, { run_duration: steps });
+    net.run_duration = steps;
+    const simulation = net.runSimulation();
     
     // Collect and display results
     let stepCount = 0;
