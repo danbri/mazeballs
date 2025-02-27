@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>CTNet Unit Tests</title>
+  <link rel="stylesheet" href="https://unpkg.com/mocha/mocha.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      max-width: 1200px;
+      background-color: #f8f9fa;
+      color: #333;
+    }
+    #header {
+      margin-bottom: 20px;
+      background-color: #343a40;
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+    }
+    #header h1 {
+      color: white;
+      margin-top: 0;
+    }
+    .info-panel {
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #343a40;
+      color: #f8f9fa;
+      border-radius: 5px;
+    }
+    .info-panel h3 {
+      color: #f8f9fa;
+      border-bottom: 1px solid #6c757d;
+      padding-bottom: 8px;
+      margin-top: 15px;
+    }
+    .backend-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin-top: 15px;
+    }
+    .backend {
+      padding: 10px 15px;
+      border-radius: 4px;
+      background: #495057;
+      font-family: monospace;
+      color: #f8f9fa;
+      font-weight: bold;
+    }
+    .active {
+      background: #28a745;  /* Strong green */
+      color: white;
+      border: 1px solid #218838;
+    }
+    .unavailable {
+      background: #dc3545;  /* Strong red */
+      color: white;
+      border: 1px solid #c82333;
+      text-decoration: line-through;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #0069d9;
+    }
+    h1, h2, h3 {
+      color: #343a40;
+    }
+    #mocha {
+      margin-top: 30px;
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #results-container {
+      margin-top: 20px;
+      background-color: white;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    /* Override Mocha styles for better contrast */
+    #mocha .test.pass::before {
+      color: #28a745;
+    }
+    #mocha .test.fail::before {
+      color: #dc3545;
+    }
+    #mocha .test a.replay {
+      color: #007bff;
+    }
+    #mocha-stats {
+      color: #343a40;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>CTNet Library Unit Tests</h1>
+    <p>This page runs the CTNet unit tests in the browser environment to verify functionality across different backends.</p>
+  </div>
+
+  <div class="info-panel">
+    <h3>Environment Information</h3>
+    <div id="env-info">Loading...</div>
+    
+    <h3>Available Backends</h3>
+    <div id="backend-list" class="backend-info">
+      <div class="backend">Loading...</div>
+    </div>
+    
+    <h3>TensorFlow.js Version</h3>
+    <div id="tf-version">Checking...</div>
+    
+    <div id="backend-controls">
+      <h3>Backend Selection</h3>
+      <button id="use-wasm">Use WASM</button>
+      <button id="use-webgl">Use WebGL</button>
+      <button id="use-cpu">Use CPU</button>
+      <div id="backend-status" style="margin-top: 10px; font-weight: bold;"></div>
+    </div>
+  </div>
+
+  <div id="mocha"></div>
+
+  <!-- Load dependencies (use specific versions to avoid ES module issues) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mocha/10.2.0/mocha.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.7/chai.min.js"></script>
+  
+  <!-- Load TensorFlow.js and backends -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.2.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.2.0/dist/tf-backend-wasm.min.js"></script>
+  
+  <!-- Load CTNet library -->
+  <script src="../ctnet-library/dist/ctnet-library.js"></script>
+
+  <script>
+    // Setup Mocha
+    mocha.setup('bdd');
+    const assert = chai.assert;
+    
+    // Helper to check if tensors are approximately equal
+    function assertTensorsClose(tensorA, tensorB, epsilon = 1e-5) {
+      const a = tensorA.arraySync();
+      const b = tensorB.arraySync();
+      
+      if (tensorA.rank === 1) {
+        assert.equal(a.length, b.length, 'Arrays should have the same length');
+        for (let i = 0; i < a.length; i++) {
+          const diff = Math.abs(a[i] - b[i]);
+          assert(diff < epsilon, `Arrays differ at index ${i}: ${a[i]} vs ${b[i]}, diff: ${diff}`);
+        }
+      } else if (tensorA.rank === 2) {
+        assert.equal(a.length, b.length, 'Tensors should have the same first dimension');
+        for (let i = 0; i < a.length; i++) {
+          assert.equal(a[i].length, b[i].length, 'Tensors should have same second dimension');
+          for (let j = 0; j < a[i].length; j++) {
+            const diff = Math.abs(a[i][j] - b[i][j]);
+            assert(diff < epsilon, `Tensors differ at [${i},${j}]: ${a[i][j]} vs ${b[i][j]}, diff: ${diff}`);
+          }
+        }
+      } else {
+        throw new Error(`Unsupported tensor rank: ${tensorA.rank}`);
+      }
+    }
+    
+    // Show environment information
+    function updateEnvironmentInfo() {
+      document.getElementById('env-info').innerHTML = `
+        <p>Browser: ${navigator.userAgent}</p>
+        <p>Current backend: <strong>${tf.getBackend()}</strong></p>
+      `;
+      
+      document.getElementById('tf-version').innerHTML = `
+        <p>TensorFlow.js version: ${tf.version.tfjs}</p>
+      `;
+      
+      // List all available backends
+      const backends = Object.keys(tf.engine().registryFactory);
+      const currentBackend = tf.getBackend();
+      
+      const backendsHtml = backends.map(backend => {
+        const isActive = backend === currentBackend;
+        return `<div class="backend ${isActive ? 'active' : ''}">${backend}${isActive ? ' (active)' : ''}</div>`;
+      }).join('');
+      
+      // Add unavailable backends
+      const allBackends = ['cpu', 'webgl', 'wasm', 'webgpu'];
+      const unavailableBackends = allBackends.filter(b => !backends.includes(b));
+      
+      const unavailableHtml = unavailableBackends.map(backend => 
+        `<div class="backend unavailable">${backend} (unavailable)</div>`
+      ).join('');
+      
+      document.getElementById('backend-list').innerHTML = backendsHtml + unavailableHtml;
+    }
+    
+    // Add event listeners for backend selection
+    // Helper function for updating backend status with styling
+    function updateBackendStatus(message, isSuccess = true) {
+      const statusEl = document.getElementById('backend-status');
+      statusEl.innerText = message;
+      statusEl.style.color = isSuccess ? '#28a745' : '#dc3545';
+      statusEl.style.padding = '8px';
+      statusEl.style.borderRadius = '4px';
+      statusEl.style.backgroundColor = isSuccess ? '#d4edda' : '#f8d7da';
+      statusEl.style.borderLeft = isSuccess ? '4px solid #28a745' : '4px solid #dc3545';
+    }
+    
+    document.getElementById('use-wasm').addEventListener('click', async () => {
+      updateBackendStatus('Switching to WASM backend...', true);
+      
+      try {
+        await tf.setBackend('wasm');
+        updateBackendStatus(`✓ Successfully switched to ${tf.getBackend()} backend`, true);
+        updateEnvironmentInfo();
+      } catch (e) {
+        updateBackendStatus(`✗ Failed to set WASM backend: ${e.message}`, false);
+      }
+    });
+    
+    document.getElementById('use-webgl').addEventListener('click', async () => {
+      updateBackendStatus('Switching to WebGL backend...', true);
+      
+      try {
+        await tf.setBackend('webgl');
+        updateBackendStatus(`✓ Successfully switched to ${tf.getBackend()} backend`, true);
+        updateEnvironmentInfo();
+      } catch (e) {
+        updateBackendStatus(`✗ Failed to set WebGL backend: ${e.message}`, false);
+      }
+    });
+    
+    document.getElementById('use-cpu').addEventListener('click', async () => {
+      updateBackendStatus('Switching to CPU backend...', true);
+      
+      try {
+        await tf.setBackend('cpu');
+        updateBackendStatus(`✓ Successfully switched to ${tf.getBackend()} backend`, true);
+        updateEnvironmentInfo();
+      } catch (e) {
+        updateBackendStatus(`✗ Failed to set CPU backend: ${e.message}`, false);
+      }
+    });
+    
+    // Initialize WASM backend if available
+    async function initWasm() {
+      if (tf.engine().registryFactory.wasm) {
+        try {
+          // Set WASM paths for browser
+          await tf.wasm.setWasmPaths(
+            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+          );
+          console.log('WASM paths set');
+        } catch (e) {
+          console.error('Error setting WASM paths:', e);
+        }
+      }
+    }
+    
+    // CTNETS TESTS
+    describe('CTNet Library Tests', function() {
+      // Initialization tests
+      describe('Initialization', function() {
+        it('should create a network with default parameters', function() {
+          const net = window.ctNet();
+          assert.equal(net.size, 3, 'Default size should be 3');
+          assert(net.weights instanceof tf.Tensor, 'Weights should be a tensor');
+          assert.equal(net.weights.shape[0], 3, 'Weights should have correct shape');
+          assert.equal(net.weights.shape[1], 3, 'Weights should have correct shape');
+        });
+        
+        it('should create a network with specified size', function() {
+          const net = window.ctNet(5);
+          assert.equal(net.size, 5, 'Size should be 5');
+          assert.equal(net.weights.shape[0], 5, 'Weights should have correct shape');
+          assert.equal(net.weights.shape[1], 5, 'Weights should have correct shape');
+        });
+        
+        it('should create a network with specified weights', function() {
+          const weights = [
+            [1, 2],
+            [3, 4]
+          ];
+          const net = window.ctNet({
+            size: 2,
+            init_weights: weights
+          });
+          
+          assert.equal(net.size, 2, 'Size should be 2');
+          const networkWeights = net.weights.arraySync();
+          assert.deepEqual(networkWeights, weights, 'Weights should match');
+        });
+      });
+      
+      // Beer oscillator test
+      describe('Beer Oscillator', function() {
+        it('should configure the Beer oscillator correctly', function() {
+          // Create Beer oscillator
+          const net = window.ctNet({
+            size: 2,
+            init_weights: [
+              [4.5, 1],
+              [-1, 4.5]
+            ]
+          });
+          
+          net.states = tf.tensor1d([0.1, 0.5]);
+          net.biases = tf.tensor1d([-2.75, -1.75]);
+          net.step_size = 0.01;
+          
+          // Verify configuration
+          assert.equal(net.size, 2);
+          assertTensorsClose(net.weights, tf.tensor2d([[4.5, 1], [-1, 4.5]]));
+          assertTensorsClose(net.states, tf.tensor1d([0.1, 0.5]));
+          assertTensorsClose(net.biases, tf.tensor1d([-2.75, -1.75]));
+          assert.equal(net.step_size, 0.01);
+        });
+        
+        it('should run a simulation with the Beer oscillator', async function() {
+          // Create Beer oscillator
+          const net = window.ctNet({
+            size: 2,
+            init_weights: [
+              [4.5, 1],
+              [-1, 4.5]
+            ]
+          });
+          
+          net.states = tf.tensor1d([0.1, 0.5]);
+          net.biases = tf.tensor1d([-2.75, -1.75]);
+          net.step_size = 0.01;
+          net.run_duration = 100; // Run for 100 steps
+          
+          // Run simulation
+          const simulation = net.runSimulation();
+          const results = [];
+          
+          // Collect results
+          for await (const result of simulation) {
+            results.push({
+              states: result.states_cpu.slice(),
+              outputs: result.outputs_cpu.slice()
+            });
+            
+            // Break early if we've collected enough data
+            if (results.length >= 20) break;
+          }
+          
+          // Verify results
+          assert(results.length > 0, 'Simulation should produce results');
+          
+          // Check for oscillatory behavior by examining several points
+          const firstState = results[0].states;
+          const middleState = results[Math.floor(results.length / 2)].states;
+          
+          // States should change over time
+          const hasChanged = firstState[0] !== middleState[0] || firstState[1] !== middleState[1];
+          assert(hasChanged, 'States should change over time');
+          
+          // All states should be finite
+          for (const result of results) {
+            for (const value of result.states) {
+              assert(!isNaN(value) && isFinite(value), 'All state values should be finite');
+            }
+            for (const value of result.outputs) {
+              assert(!isNaN(value) && isFinite(value), 'All output values should be finite');
+            }
+          }
+          
+          // Display result in the UI
+          const resultString = `Collected ${results.length} simulation steps. ` +
+            `First state: [${results[0].states.map(v => v.toFixed(3)).join(', ')}], ` +
+            `Last state: [${results[results.length-1].states.map(v => v.toFixed(3)).join(', ')}]`;
+          
+          const resultElement = document.createElement('div');
+          resultElement.className = 'result-item';
+          resultElement.innerHTML = `<p style="color:green">✓ ${resultString}</p>`;
+          document.getElementById('results-container').appendChild(resultElement);
+        });
+      });
+    });
+    
+    // Function to run tests with a specific backend
+    async function runTestsWithBackend(backendName) {
+      try {
+        // Set the backend
+        const originalBackend = tf.getBackend();
+        await tf.setBackend(backendName);
+        
+        updateBackendStatus(`Running tests with ${backendName} backend...`, true);
+        updateEnvironmentInfo();
+        
+        // Clear previous results
+        document.getElementById('mocha').innerHTML = '';
+        mocha.setup('bdd');
+        
+        // Run tests
+        const runner = mocha.run();
+        
+        // Add results to container
+        return new Promise((resolve) => {
+          runner.on('end', function() {
+            const resultEl = document.createElement('div');
+            resultEl.className = 'backend-results';
+            resultEl.style.marginTop = '20px';
+            resultEl.style.padding = '10px';
+            resultEl.style.backgroundColor = runner.stats.failures > 0 ? '#f8d7da' : '#d4edda';
+            resultEl.style.borderRadius = '4px';
+            resultEl.style.color = '#333';
+            resultEl.style.fontWeight = 'bold';
+            
+            resultEl.innerHTML = `
+              <h3>${backendName.toUpperCase()} Backend Test Results</h3>
+              <p>Passed: ${runner.stats.passes} | Failed: ${runner.stats.failures} | Total: ${runner.stats.tests}</p>
+            `;
+            
+            document.getElementById('results-container').appendChild(resultEl);
+            resolve({
+              backend: backendName,
+              passes: runner.stats.passes,
+              failures: runner.stats.failures,
+              total: runner.stats.tests
+            });
+          });
+        });
+      } catch (e) {
+        console.error(`Error testing with ${backendName} backend:`, e);
+        return {
+          backend: backendName,
+          error: e.message,
+          passes: 0,
+          failures: 1,
+          total: 1
+        };
+      }
+    }
+    
+    // Function to run tests on all available backends
+    async function runTestsOnAllBackends() {
+      // Add a results container
+      if (!document.getElementById('results-container')) {
+        const resultsContainer = document.createElement('div');
+        resultsContainer.id = 'results-container';
+        resultsContainer.innerHTML = '<h2>Test Results for All Available Backends</h2>';
+        document.body.appendChild(resultsContainer);
+      } else {
+        document.getElementById('results-container').innerHTML = '<h2>Test Results for All Available Backends</h2>';
+      }
+      
+      // Get available backends
+      const backends = Object.keys(tf.engine().registryFactory);
+      const results = [];
+      
+      // Run tests on each backend sequentially
+      for (const backend of backends) {
+        updateBackendStatus(`Testing with ${backend} backend...`, true);
+        const result = await runTestsWithBackend(backend);
+        results.push(result);
+      }
+      
+      // Show summary
+      const summaryEl = document.createElement('div');
+      summaryEl.style.marginTop = '20px';
+      summaryEl.style.padding = '15px';
+      summaryEl.style.backgroundColor = '#343a40';
+      summaryEl.style.color = 'white';
+      summaryEl.style.borderRadius = '5px';
+      
+      summaryEl.innerHTML = `
+        <h3>Test Summary</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #495057;">Backend</th>
+              <th style="text-align: center; padding: 8px; border-bottom: 1px solid #495057;">Passed</th>
+              <th style="text-align: center; padding: 8px; border-bottom: 1px solid #495057;">Failed</th>
+              <th style="text-align: center; padding: 8px; border-bottom: 1px solid #495057;">Total</th>
+              <th style="text-align: center; padding: 8px; border-bottom: 1px solid #495057;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${results.map(r => `
+              <tr>
+                <td style="text-align: left; padding: 8px; border-bottom: 1px solid #495057;">${r.backend}</td>
+                <td style="text-align: center; padding: 8px; border-bottom: 1px solid #495057;">${r.passes}</td>
+                <td style="text-align: center; padding: 8px; border-bottom: 1px solid #495057;">${r.failures}</td>
+                <td style="text-align: center; padding: 8px; border-bottom: 1px solid #495057;">${r.total}</td>
+                <td style="text-align: center; padding: 8px; border-bottom: 1px solid #495057; color: ${r.failures > 0 ? '#dc3545' : '#28a745'}">
+                  ${r.failures > 0 ? '✗ FAIL' : '✓ PASS'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      
+      document.getElementById('results-container').appendChild(summaryEl);
+    }
+    
+    // Initialize the environment
+    async function initEnvironment() {
+      await initWasm();
+      updateEnvironmentInfo();
+      
+      // Add a results container if it doesn't exist
+      if (!document.getElementById('results-container')) {
+        const resultsContainer = document.createElement('div');
+        resultsContainer.id = 'results-container';
+        document.body.appendChild(resultsContainer);
+      }
+      
+      // Add button to test all backends
+      const testAllBtn = document.createElement('button');
+      testAllBtn.id = 'test-all-backends';
+      testAllBtn.innerText = 'Run Tests on All Available Backends';
+      testAllBtn.style.display = 'block';
+      testAllBtn.style.margin = '20px auto';
+      testAllBtn.style.padding = '12px 24px';
+      testAllBtn.style.fontSize = '16px';
+      testAllBtn.onclick = runTestsOnAllBackends;
+      
+      document.body.insertBefore(testAllBtn, document.getElementById('mocha'));
+    }
+    
+    // Start everything
+    window.onload = initEnvironment;
+  </script>
+</body>
+</html>

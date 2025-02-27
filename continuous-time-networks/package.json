@@ -1,0 +1,47 @@
+{
+  "name": "ctnet",
+  "version": "0.1.0",
+  "description": "A library for simulating continuous-time dynamical networks",
+  "license": "Apache-2.0",
+  "main": "dist/ctnet.js",
+  "module": "dist/ctnet.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/ctnet.mjs",
+      "require": "./dist/ctnet.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "clean": "rm -rf dist/",
+    "clean:all": "rm -rf dist/ node_modules/",
+    "test": "jest",
+    "test:browser": "open tests/browser/runner.html",
+    "test:wasm": "node tests/check-wasm.js"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.1.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.1.0"
+  },
+  "devDependencies": {
+    "jest": "^29.3.1",
+    "rollup": "^3.7.5",
+    "@rollup/plugin-terser": "^0.4.4"
+  },
+  "keywords": [
+    "neural-networks",
+    "tensorflow",
+    "simulation",
+    "dynamical-systems",
+    "browser"
+  ],
+  "author": "Mazeballs Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mazeballs/continuous-time-networks"
+  }
+}

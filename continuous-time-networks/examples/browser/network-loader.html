@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loading Network Definitions - CTNet Example</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+  <script src="../../dist/ctnet.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      display: block;
+      margin: 20px 0;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #3b78e7;
+    }
+    #log {
+      margin-top: 20px;
+      height: 200px;
+      overflow-y: auto;
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>Loading Network Definitions - CTNet Example</h1>
+  
+  <p>This example demonstrates loading network definitions from JSON files.</p>
+  
+  <div>
+    <button id="loadBtn">Load Beer Oscillator</button>
+    <button id="runBtn" disabled>Run Network</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </div>
+  
+  <div>
+    <h3>Network Definition:</h3>
+    <pre id="netDefDisplay">No network loaded yet.</pre>
+  </div>
+  
+  <div>
+    <h3>Visualization:</h3>
+    <canvas id="outputCanvas" width="700" height="200"></canvas>
+  </div>
+  
+  <div id="log"></div>
+  
+  <script>
+    // Set WASM backend path for local development
+    tf.wasm.setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/');
+    
+    // Try to use WASM backend if available, otherwise fall back to CPU
+    async function setupBackend() {
+      try {
+        if (tf.findBackend('wasm')) {
+          await tf.setBackend('wasm');
+          log('Using WASM backend');
+        } else {
+          log('WASM backend not available, using: ' + tf.getBackend());
+        }
+      } catch (e) {
+        log('Error setting backend: ' + e.message);
+      }
+    }
+    
+    // Elements
+    const loadBtn = document.getElementById('loadBtn');
+    const runBtn = document.getElementById('runBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const netDefDisplay = document.getElementById('netDefDisplay');
+    const outputCanvas = document.getElementById('outputCanvas');
+    const logEl = document.getElementById('log');
+    
+    // Canvas setup
+    const ctx = outputCanvas.getContext('2d');
+    
+    // Logging function
+    function log(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      logEl.innerHTML += `[${timestamp}] ${message}<br>`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    
+    // Variables
+    let netDef = null;
+    let net = null;
+    let animationId = null;
+    let timePoints = [];
+    let outputData = [[], []];
+    
+    // Load network definition
+    loadBtn.addEventListener('click', async () => {
+      try {
+        // Setup backend
+        await setupBackend();
+        
+        // Fetch network definition
+        const response = await fetch('../../networks/oscillators/beer_oscillator.json');
+        netDef = await response.json();
+        
+        // Display network definition
+        netDefDisplay.textContent = JSON.stringify(netDef, null, 2);
+        
+        // Enable run button
+        runBtn.disabled = false;
+        
+        log('Network definition loaded successfully');
+      } catch (e) {
+        log('Error loading network definition: ' + e.message);
+      }
+    });
+    
+    // Run the network
+    runBtn.addEventListener('click', async () => {
+      if (!netDef) {
+        log('No network definition loaded');
+        return;
+      }
+      
+      try {
+        // Initialize network
+        net = new CTNet.CTNet(netDef);
+        
+        // Initialize with random values
+        net.initState = function(initialState = null) {
+          if (initialState) {
+            this.states = tf.tensor(initialState, [netDef.size, 1]);
+          } else {
+            this.states = tf.tensor(Array(netDef.size).fill(0).map(() => Math.random() * 0.5), [netDef.size, 1]);
+          }
+          this.outputs = tf.sigmoid(this.states.add(this.biases).mul(this.gains));
+        };
+        
+        // Initialize the network
+        net.initState([0.1, 0.2]);
+        
+        // Reset data
+        timePoints = [];
+        outputData = [[], []];
+        
+        // Start animation
+        runBtn.disabled = true;
+        stopBtn.disabled = false;
+        
+        // Run simulation loop
+        let time = 0;
+        let step = netDef.step_size || 0.01;
+        
+        function simulationLoop() {
+          // Run a few steps per frame
+          for (let i = 0; i < 10; i++) {
+            const calc = net.eulerStep(net, net.states, net.outputs);
+            net.states = calc.states;
+            net.outputs = calc.outputs;
+            
+            // Store outputs
+            const outputs = calc.outputs_cpu;
+            time += step;
+            timePoints.push(time);
+            outputData[0].push(outputs[0][0]);
+            outputData[1].push(outputs[1][0]);
+            
+            // Keep only last 1000 points
+            if (timePoints.length > 1000) {
+              timePoints.shift();
+              outputData[0].shift();
+              outputData[1].shift();
+            }
+          }
+          
+          // Draw outputs
+          drawOutputs();
+          
+          // Continue animation
+          animationId = requestAnimationFrame(simulationLoop);
+        }
+        
+        simulationLoop();
+        log('Network simulation started');
+      } catch (e) {
+        log('Error starting network: ' + e.message);
+      }
+    });
+    
+    // Stop the simulation
+    stopBtn.addEventListener('click', () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+        runBtn.disabled = false;
+        stopBtn.disabled = true;
+        log('Network simulation stopped');
+      }
+    });
+    
+    // Draw outputs on canvas
+    function drawOutputs() {
+      const width = outputCanvas.width;
+      const height = outputCanvas.height;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      // Draw background grid
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 1;
+      
+      // Horizontal lines
+      for (let y = 0; y <= 1; y += 0.25) {
+        const canvasY = height - y * height;
+        ctx.beginPath();
+        ctx.moveTo(0, canvasY);
+        ctx.lineTo(width, canvasY);
+        ctx.stroke();
+      }
+      
+      // No data to draw
+      if (timePoints.length === 0) return;
+      
+      // Draw output lines
+      const colors = ['#E74C3C', '#3498DB'];
+      
+      for (let nodeIdx = 0; nodeIdx < 2; nodeIdx++) {
+        ctx.strokeStyle = colors[nodeIdx];
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        const nodeData = outputData[nodeIdx];
+        const dataLength = nodeData.length;
+        
+        for (let i = 0; i < dataLength; i++) {
+          const x = (i / (dataLength - 1)) * width;
+          const y = height - nodeData[i] * height;
+          
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        
+        ctx.stroke();
+      }
+      
+      // Draw legend
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      
+      for (let nodeIdx = 0; nodeIdx < 2; nodeIdx++) {
+        const x = 10;
+        const y = 10 + nodeIdx * 20;
+        
+        ctx.fillStyle = colors[nodeIdx];
+        ctx.fillRect(x, y, 15, 15);
+        
+        ctx.fillStyle = '#000';
+        ctx.fillText(`Node ${nodeIdx + 1}`, x + 25, y + 7);
+      }
+    }
+    
+    // Initialize
+    log('Example initialized. Click "Load Beer Oscillator" to begin.');
+  </script>
+</body>
+</html>

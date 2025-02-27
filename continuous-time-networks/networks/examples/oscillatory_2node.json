@@ -1,0 +1,12 @@
+{
+    "size": 2,
+    "init_weights": [
+        [4.5, 1],
+        [-1, 4.5]
+    ],
+    "init_states": [2.0, 3.0],
+    "init_biases": [-2.75, -1.75],
+    "init_taus": [1, 1],
+    "step_size": 0.1,
+    "name": "2-node oscillator (Beer 1995)"
+}

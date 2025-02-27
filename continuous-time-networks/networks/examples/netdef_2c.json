@@ -1,0 +1,11 @@
+{
+    "size": 2,
+    "init_weights": [
+      [4.5, 1],
+      [-1, 4.5]
+    ],
+    "name": "2 node oscillating sample from Beer1995.",
+    "init_states": [2.0, 3.0],
+    "init_biases": [-2.75, -1.75],
+    "autofreeze": "true"
+}

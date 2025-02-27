@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTNet Oscillator Simulation</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="../../dist/ctnet.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .chart-container {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .controls {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px;
+      margin: 5px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .stats {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #e9f7ef;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>CTNet Oscillator Simulation</h1>
+    <p>This is a JavaScript implementation of the oscillatory CTRNN network, ported from Python. This version uses optimized parameters (10 time units, 0.02 step size) for better browser performance.</p>
+    
+    <div class="controls">
+      <button id="run-simulation">Run Simulation</button>
+      <button id="reset-simulation">Reset</button>
+      <span id="status">Ready to run</span>
+      
+      <div style="margin-top: 10px;">
+        <label for="backend-select">Select TensorFlow backend: </label>
+        <select id="backend-select">
+          <option value="auto">Auto (WebGL > WASM > CPU)</option>
+          <option value="webgl">WebGL</option>
+          <option value="wasm">WASM</option>
+          <option value="cpu">CPU</option>
+        </select>
+        <button id="set-backend">Set Backend</button>
+      </div>
+    </div>
+    
+    <div class="chart-container">
+      <svg id="plot" width="800" height="400"></svg>
+    </div>
+    
+    <div class="stats" id="stats-container">
+      <h3>Statistics</h3>
+      <div id="stats">Run the simulation to see statistics</div>
+    </div>
+  </div>
+
+  <script>
+    // Load WASM backend if not already available
+    async function setupWasmBackend() {
+      try {
+        // Check if WASM backend is already registered
+        if (!Object.keys(tf.engine().registryFactory).includes('wasm')) {
+          console.log("WASM backend not found, attempting to register it...");
+          
+          // For browsers, we load the WASM backend from CDN
+          await tf.setWasmPaths(
+            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+          );
+          console.log("WASM backend registered successfully");
+        }
+      } catch (e) {
+        console.error("Failed to set up WASM backend:", e);
+      }
+    }
+    
+    // Setup TensorFlow backend preferences
+    async function setupTensorFlowBackend(preferredBackend = null) {
+      // Try to set up WASM backend first (makes it available as an option)
+      await setupWasmBackend();
+      
+      // Get available backends
+      const backends = Object.keys(tf.engine().registryFactory);
+      console.log("Available TensorFlow.js backends:", backends);
+      
+      let backendName = 'cpu'; // Default fallback
+      
+      // If a preferred backend is specified and available, use it
+      if (preferredBackend && backends.includes(preferredBackend)) {
+        backendName = preferredBackend;
+      } 
+      // Otherwise use our default preference order
+      else if (backends.includes('webgl')) {
+        backendName = 'webgl';
+      } else if (backends.includes('wasm')) {
+        backendName = 'wasm';
+      }
+      
+      try {
+        await tf.setBackend(backendName);
+        console.log(`Using ${backendName} backend`);
+      } catch (e) {
+        console.error(`Failed to set ${backendName} backend:`, e);
+        console.log("Falling back to CPU backend");
+        await tf.setBackend('cpu');
+      }
+      
+      // Display backend info in UI
+      document.getElementById("status").textContent = `Using ${tf.getBackend()} backend`;
+      
+      return tf.getBackend();
+    }
+    
+    // Parameters for better browser performance
+    const runDuration = 10; // Reduced from 250 to 10 time units
+    const netSize = 2;
+    const stepSize = 0.02; // Increased from 0.01 to get ~500 data points
+    
+    // SVG plot setup
+    const svg = d3.select("#plot");
+    const margin = {top: 30, right: 50, bottom: 50, left: 50};
+    const width = +svg.attr("width") - margin.left - margin.right;
+    const height = +svg.attr("height") - margin.top - margin.bottom;
+    
+    // Initialize the plot
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+    
+    // Add X axis
+    const x = d3.scaleLinear()
+      .domain([0, runDuration])
+      .range([0, width]);
+    
+    g.append("g")
+      .attr("transform", `translate(0,${height})`)
+      .call(d3.axisBottom(x));
+    
+    // Add X axis label
+    g.append("text")
+      .attr("transform", `translate(${width/2},${height + 40})`)
+      .style("text-anchor", "middle")
+      .text("Time");
+    
+    // Add Y axis
+    const y = d3.scaleLinear()
+      .domain([0, 1])  // Output range is 0-1 (sigmoid)
+      .range([height, 0]);
+    
+    g.append("g")
+      .call(d3.axisLeft(y));
+    
+    // Add Y axis label
+    g.append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", -40)
+      .attr("x", -height/2)
+      .style("text-anchor", "middle")
+      .text("Neuron Output");
+    
+    // Add title
+    g.append("text")
+      .attr("x", width / 2)
+      .attr("y", -10)
+      .attr("text-anchor", "middle")
+      .style("font-size", "16px")
+      .text("CTRNN Oscillator Output");
+    
+    // Add legend
+    const legend = g.append("g")
+      .attr("transform", `translate(${width - 120}, 20)`);
+    
+    // Legend for neuron 0
+    legend.append("line")
+      .attr("x1", 0)
+      .attr("y1", 0)
+      .attr("x2", 30)
+      .attr("y2", 0)
+      .style("stroke", "blue")
+      .style("stroke-width", 2);
+    
+    legend.append("text")
+      .attr("x", 35)
+      .attr("y", 5)
+      .text("Neuron 0");
+    
+    // Legend for neuron 1
+    legend.append("line")
+      .attr("x1", 0)
+      .attr("y1", 20)
+      .attr("x2", 30)
+      .attr("y2", 20)
+      .style("stroke", "red")
+      .style("stroke-width", 2);
+    
+    legend.append("text")
+      .attr("x", 35)
+      .attr("y", 25)
+      .text("Neuron 1");
+    
+    // Line generator for plotting
+    const line0 = d3.line()
+      .x(d => x(d.time))
+      .y(d => y(d.output0));
+    
+    const line1 = d3.line()
+      .x(d => x(d.time))
+      .y(d => y(d.output1));
+    
+    // Path elements for the lines
+    const path0 = g.append("path")
+      .attr("fill", "none")
+      .attr("stroke", "blue")
+      .attr("stroke-width", 1.5);
+    
+    const path1 = g.append("path")
+      .attr("fill", "none")
+      .attr("stroke", "red")
+      .attr("stroke-width", 1.5);
+    
+    // Keep track of user's backend preference
+    let userBackendPreference = null;
+    
+    // Initialize TensorFlow backend on page load
+    document.addEventListener('DOMContentLoaded', async () => {
+      await setupTensorFlowBackend();
+      
+      // Set up backend selection button
+      document.getElementById('set-backend').addEventListener('click', async () => {
+        const select = document.getElementById('backend-select');
+        const selectedValue = select.options[select.selectedIndex].value;
+        
+        // If auto, clear preference
+        if (selectedValue === 'auto') {
+          userBackendPreference = null;
+          document.getElementById("status").textContent = "Using automatic backend selection";
+        } else {
+          userBackendPreference = selectedValue;
+        }
+        
+        await setupTensorFlowBackend(userBackendPreference);
+      });
+    });
+    
+    // Function to run the simulation
+    async function runSimulation() {
+      // Make sure we have the preferred backend
+      await setupTensorFlowBackend(userBackendPreference);
+      
+      document.getElementById("status").textContent = "Running simulation...";
+      
+      // Set up network (matching Python structure)
+      const network = ctNet({
+        size: netSize,
+        init_weights: [
+          [4.5, 1],
+          [-1, 4.5]
+        ]
+      });
+      
+      // Configure network parameters (second step of initialization)
+      network.taus = tf.tensor1d([1.0, 1.0]);
+      network.biases = tf.tensor1d([-2.75, -1.75]);
+      network.step_size = stepSize;
+      network.run_duration = Math.floor(runDuration / stepSize);
+      
+      // Initialize network with random outputs (matching Python's randomize_outputs)
+      const randomValues = [
+        Math.random() * 0.1 + 0.1, // Random between 0.1 and 0.2
+        Math.random() * 0.1 + 0.1  // Random between 0.1 and 0.2
+      ];
+      network.states = tf.tensor1d(randomValues);
+      
+      // Data storage
+      const data = [];
+      let currentTime = 0;
+      
+      // Run simulation and collect data
+      const simulation = network.runSimulation();
+      
+      for await (const state of simulation) {
+        // Store data points
+        data.push({
+          time: currentTime,
+          output0: state.outputs_cpu[0],
+          output1: state.outputs_cpu[1]
+        });
+        
+        currentTime += stepSize;
+        
+        // Break if we've simulated for the full duration
+        if (currentTime >= runDuration) break;
+        
+        // Update status more frequently with smaller dataset
+        if (data.length % 50 === 0) {
+          document.getElementById("status").textContent = 
+            `Running: ${Math.round(currentTime / runDuration * 100)}% complete...`;
+          
+          // Allow UI to update by waiting a moment
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+      
+      // Update plot with the collected data
+      path0.datum(data)
+        .attr("d", line0);
+      
+      path1.datum(data)
+        .attr("d", line1);
+      
+      // Calculate statistics
+      const mean0 = data.reduce((sum, d) => sum + d.output0, 0) / data.length;
+      const mean1 = data.reduce((sum, d) => sum + d.output1, 0) / data.length;
+      
+      // Update statistics display
+      document.getElementById("stats").innerHTML = `
+        <p>TensorFlow backend: <strong>${tf.getBackend()}</strong></p>
+        <p>Simulation time: ${runDuration} time units</p>
+        <p>Step size: ${stepSize}</p>
+        <p>Data points: ${data.length}</p>
+        <p>Neuron 0 mean output: ${mean0.toFixed(4)}</p>
+        <p>Neuron 1 mean output: ${mean1.toFixed(4)}</p>
+        <p>Oscillation period: ~${detectPeriod(data.map(d => d.output0)).toFixed(2)} time units</p>
+      `;
+      
+      document.getElementById("status").textContent = "Simulation complete!";
+    }
+    
+    // Function to detect approximate oscillation period
+    function detectPeriod(signal) {
+      // Find zero crossings around 0.5 (the midpoint for sigmoid outputs)
+      const crossings = [];
+      for (let i = 1; i < signal.length; i++) {
+        if ((signal[i-1] < 0.5 && signal[i] >= 0.5) || 
+            (signal[i-1] >= 0.5 && signal[i] < 0.5)) {
+          crossings.push(i);
+        }
+      }
+      
+      // Calculate average distance between crossings (full period is two crossings)
+      if (crossings.length <= 1) return 0;
+      
+      let sumDiffs = 0;
+      for (let i = 2; i < crossings.length; i += 2) {
+        sumDiffs += crossings[i] - crossings[i-2];
+      }
+      
+      const avgDiff = sumDiffs / Math.floor(crossings.length / 2);
+      return avgDiff * stepSize; // Convert steps to time units
+    }
+    
+    // Event listeners for buttons
+    document.getElementById("run-simulation").addEventListener("click", runSimulation);
+    
+    document.getElementById("reset-simulation").addEventListener("click", () => {
+      // Clear the plot
+      path0.datum([]).attr("d", line0);
+      path1.datum([]).attr("d", line1);
+      
+      // Reset stats
+      document.getElementById("stats").textContent = "Run the simulation to see statistics";
+      document.getElementById("status").textContent = "Ready to run";
+    });
+  </script>
+</body>
+</html>

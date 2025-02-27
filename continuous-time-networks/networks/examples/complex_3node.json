@@ -1,0 +1,13 @@
+{
+    "size": 3,
+    "init_weights": [
+        [6.7, -3.5, -0.3],
+        [0.5, 4.3, 1.0],
+        [-1.0, 2.0, 5.5]
+    ],
+    "init_states": [0.1, 0.4, 0.7],
+    "init_biases": [-3.0, -1.0, 0.5],
+    "init_taus": [1.0, 1.5, 2.0],
+    "step_size": 0.1,
+    "name": "3-node complex dynamics"
+}

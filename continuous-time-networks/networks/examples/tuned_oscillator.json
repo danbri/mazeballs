@@ -1,0 +1,12 @@
+{
+    "size": 2,
+    "init_weights": [
+        [4.5, 1.2],
+        [-1.2, 4.5]
+    ],
+    "init_states": [0.1, 0.3],
+    "init_biases": [-2.75, -1.75],
+    "init_taus": [1, 1.2],
+    "step_size": 0.01,
+    "name": "Fine-tuned 2-node oscillator"
+}
