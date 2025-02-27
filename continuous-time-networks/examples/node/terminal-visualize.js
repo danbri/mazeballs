@@ -8,9 +8,77 @@
 
 const { CTNet } = require('../../src/index.js');
 const tf = require('@tensorflow/tfjs');
-// Terminal sparklines functionality is missing in the new structure
-// You'll need to copy the terminal-sparklines.js file from the old project
-const { generateSparklines, displaySparklines, animateSparklines, INK } = require('./term-sparklines.js');
+// Let's create our own sparklines functions rather than relying on an external module
+// Define sparkify function for creating sparklines
+const sparkify = pc => '▁▂▃▄▅▆▇█'.split('')[Math.floor((pc / 12.5))];
+
+// Terminal colors
+const colors = {
+  reset: "\x1b[0m",
+  blue: "\x1b[34m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m"
+};
+
+// Generate sparklines from a simulation
+async function generateSparklines(net, simulation, options = {}) {
+  const steps = options.steps || 100;
+  const sparklines = Array(net.size).fill().map(() => []);
+  
+  let count = 0;
+  for await (const state of simulation) {
+    if (count++ >= steps) break;
+    
+    const values = state.outputs_cpu;
+    
+    // For each neuron, generate a sparkline character
+    for (let i = 0; i < net.size; i++) {
+      // Scale the value from [0,1] to [0,100] for the sparkify function
+      const value = values[i] * 100;
+      sparklines[i].push(sparkify(value));
+    }
+  }
+  
+  return sparklines;
+}
+
+// Display sparklines in the terminal
+function displaySparklines(sparklines, net) {
+  for (let i = 0; i < sparklines.length; i++) {
+    const color = [colors.blue, colors.red, colors.green, colors.yellow][i % 4];
+    console.log(`Node ${i}: ${color}${sparklines[i].join('')}${colors.reset}`);
+  }
+}
+
+// Animate sparklines in the terminal
+async function animateSparklines(sparklines, net, options = {}) {
+  const delay = options.delay || 100;
+  const frames = options.frames || 100;
+  const width = process.stdout.columns ? process.stdout.columns - 20 : 80;
+  
+  for (let frame = 0; frame < frames; frame++) {
+    // Clear terminal
+    console.clear();
+    
+    console.log("OSCILLATOR ANIMATION\n");
+    
+    // For each node, display a window of the sparkline
+    for (let i = 0; i < net.size; i++) {
+      const line = sparklines[i];
+      const start = Math.max(0, frame - width);
+      const window = line.slice(start, start + width);
+      const color = [colors.blue, colors.red, colors.green, colors.yellow][i % 4];
+      
+      console.log(`Node ${i}: ${color}${window.join('')}${colors.reset}`);
+    }
+    
+    console.log(`\nFrame: ${frame}/${frames} (Ctrl+C to exit)`);
+    
+    // Wait for next frame
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+}
 
 // Try to load chalk for terminal colors if available
 let chalk;
