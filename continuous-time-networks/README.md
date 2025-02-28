@@ -14,18 +14,18 @@ This library implements CTRNNs (Continuous-Time Recurrent Neural Networks) with 
 
 ## Status
 
-This library is experimental and in active development. It's published to npm as an alpha version.
+This library is experimental and in active development. It's published to npm.
 
 ## Installation
 
-The package is available on npm with an experimental tag:
+The package is available on npm:
 
 ```bash
-# Install the experimental version globally
-npm install -g @mazeballs/ctnet-experimental
+# Install globally
+npm install -g @mazeballs/ctnet
 
 # Or install in a project
-npm install @mazeballs/ctnet-experimental --save-dev
+npm install @mazeballs/ctnet --save-dev
 ```
 
 Alternatively, you can install directly from the repository:
@@ -41,7 +41,7 @@ npm install
 ### Node.js
 ```javascript
 // Import CTNet
-const { CTNet } = require('@mazeballs/ctnet-experimental');
+const { CTNet } = require('@mazeballs/ctnet');
 
 // TensorFlow.js is needed 
 const tf = require('@tensorflow/tfjs');
@@ -148,7 +148,7 @@ You can select a backend using:
 
 ```javascript
 // Import the library with integrated backend support
-const { CTNet, backends } = require('@mazeballs/ctnet-experimental');
+const { CTNet, backends } = require('@mazeballs/ctnet');
 
 // Backends are automatically set up with default preference: wasm > webgl > cpu
 // You can check what backend was selected:
