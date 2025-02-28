@@ -22,7 +22,14 @@
     "clean:all": "rm -rf dist/ node_modules/",
     "test": "jest",
     "test:browser": "open tests/browser/runner.html",
-    "test:wasm": "node tests/check-wasm.js"
+    "test:wasm": "node tests/check-wasm.js",
+    "publish:patch": "npm version patch && npm publish --tag experimental",
+    "publish:minor": "npm version minor && npm publish --tag experimental",
+    "publish:alpha": "npm version prerelease --preid=alpha && npm publish --tag experimental",
+    "prepublishOnly": "npm run build",
+    "lint": "echo 'No linter configured yet'",
+    "docs": "echo 'No documentation generator configured yet'",
+    "dev": "rollup -c -w"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.1.0",
