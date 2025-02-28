@@ -4,6 +4,112 @@
 (function (global) {
     // Import TensorFlow.js if running in Node.js
     const tf = typeof module !== "undefined" && module.exports ? require("@tensorflow/tfjs") : global.tf;
+    
+    // Simplified backend initialization (integrated from backends.js)
+    let setupBackendsComplete = false;
+    
+    /**
+     * Initialize and select the best available TensorFlow.js backend
+     * 
+     * @param {string[]} preferenceOrder - Backend names in order of preference
+     * @returns {Promise<string>} Name of the selected backend
+     */
+    async function setupBackends(preferenceOrder = ['wasm', 'webgl', 'cpu']) {
+        // Skip if already done
+        if (setupBackendsComplete) {
+            return tf.getBackend();
+        }
+        
+        // Helper to check if a backend is registered
+        function isBackendRegistered(name) {
+            return Object.keys(tf.engine().registryFactory).includes(name);
+        }
+        
+        // Helper to check if a backend is available
+        async function tryBackend(name) {
+            if (!isBackendRegistered(name)) return false;
+            
+            try {
+                const originalBackend = tf.getBackend();
+                await tf.setBackend(name);
+                const success = tf.getBackend() === name;
+                
+                // If test failed, restore original
+                if (!success && originalBackend) {
+                    await tf.setBackend(originalBackend);
+                }
+                return success;
+            } catch (e) {
+                return false;
+            }
+        }
+        
+        // Initialize WASM backend if possible
+        if (preferenceOrder.includes('wasm')) {
+            try {
+                // Try to load WASM backend in Node.js
+                if (typeof module !== "undefined" && module.exports) {
+                    try {
+                        // Load the WASM backend
+                        const tfwasm = require('@tensorflow/tfjs-backend-wasm');
+                        
+                        // Set up paths for the WASM binary in Node.js
+                        try {
+                            const path = require('path');
+                            const fs = require('fs');
+                            
+                            // Find WASM binary
+                            let wasmPath;
+                            try {
+                                wasmPath = require.resolve('@tensorflow/tfjs-backend-wasm/dist/tfjs-backend-wasm.wasm');
+                            } catch (e) {
+                                // Try common locations
+                                const basePath = path.join(__dirname, '..', 'node_modules', '@tensorflow', 'tfjs-backend-wasm', 'dist');
+                                if (fs.existsSync(path.join(basePath, 'tfjs-backend-wasm.wasm'))) {
+                                    wasmPath = path.join(basePath, 'tfjs-backend-wasm.wasm');
+                                }
+                            }
+                            
+                            // Set WASM paths if found
+                            if (wasmPath) {
+                                const wasmDir = wasmPath.substring(0, wasmPath.lastIndexOf(path.sep) + 1);
+                                tfwasm.setWasmPaths(wasmDir);
+                            }
+                        } catch (e) {
+                            // Silently handle path errors
+                        }
+                    } catch (e) {
+                        // Silently handle require errors
+                    }
+                }
+                // For browsers, the WASM backend script should be included separately
+                else if (typeof window !== 'undefined' && window.tf && window.tf.wasm) {
+                    try {
+                        await window.tf.wasm.setWasmPaths(
+                            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                        );
+                    } catch (e) {
+                        // Silently handle browser WASM setup errors
+                    }
+                }
+            } catch (e) {
+                // Silently handle WASM initialization errors
+            }
+        }
+        
+        // Try each backend in preference order
+        for (const backendName of preferenceOrder) {
+            if (await tryBackend(backendName)) {
+                setupBackendsComplete = true;
+                return backendName;
+            }
+        }
+        
+        // Default to CPU if nothing else works
+        await tf.setBackend('cpu');
+        setupBackendsComplete = true;
+        return 'cpu';
+    }
  
   const ctNet = function (spec) {
 
@@ -223,8 +329,29 @@
 
 
 
+    // Add backend setup to the network object
+    net.setupBackends = setupBackends;
+    
+    // Try to set up backends automatically (can be overridden later)
+    setupBackends().catch(() => {
+      // Silently handle any backend setup failures
+    });
+    
+    // Add a method to get current backend
+    net.getBackend = function() {
+      return tf.getBackend();
+    };
+    
+    // Add a method to set backend preferences
+    net.setBackendPreferences = async function(preferenceOrder) {
+      return await setupBackends(preferenceOrder);
+    };
+    
     return net;
   };
+  
+  // Include setupBackends as a static method on ctNet
+  ctNet.setupBackends = setupBackends;
 
  // Expose ctNet as a global variable
  if (typeof module !== "undefined" && module.exports) {

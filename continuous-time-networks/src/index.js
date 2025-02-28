@@ -7,9 +7,26 @@
  * @license Apache-2.0
  */
 
-// Import core modules
+// Import core module (backends are now integrated into ctNet)
 const ctNet = require('./ctNet');
-const backends = require('./backends');
+
+// Create a simplified backends API for backward compatibility
+const backends = {
+  // Method to check available backends
+  getRegisteredBackends: function() {
+    return Object.keys(require('@tensorflow/tfjs').engine().registryFactory);
+  },
+  
+  // Method to check current backend
+  getCurrentBackend: function() {
+    return require('@tensorflow/tfjs').getBackend();
+  },
+  
+  // Method to set backend preferences
+  setBestAvailableBackend: function(preferenceOrder) {
+    return ctNet.setupBackends(preferenceOrder);
+  }
+};
 
 // Re-export everything
 module.exports = {

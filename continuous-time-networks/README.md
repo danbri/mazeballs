@@ -147,22 +147,24 @@ This library supports multiple TensorFlow.js computation backends:
 You can select a backend using:
 
 ```javascript
-// Import the backends utility
-const { backends } = require('@mazeballs/ctnet-experimental');
+// Import the library with integrated backend support
+const { CTNet, backends } = require('@mazeballs/ctnet-experimental');
 
-// Set the best backend based on preference order
-await backends.setBestAvailableBackend(['webgl', 'wasm', 'cpu']);
+// Backends are automatically set up with default preference: wasm > webgl > cpu
+// You can check what backend was selected:
+console.log('Current backend:', backends.getCurrentBackend());
 
-// Check which backends are available
+// List all available backends
 const availableBackends = backends.getRegisteredBackends();
-console.log(availableBackends);
+console.log('Available backends:', availableBackends);
 
-// Check if WASM is available (recommended for best performance)
-const wasmAvailable = backends.isWasmInitialized();
-console.log('WASM backend available:', wasmAvailable);
+// You can also customize the backend preference order:
+await backends.setBestAvailableBackend(['cpu', 'wasm', 'webgl']);
 
-// Initialize WASM backend silently (no console errors)
-const success = await backends.initializeWasm(true);
+// Or directly on a network instance:
+const net = CTNet({ size: 2 });
+await net.setBackendPreferences(['wasm', 'cpu']);
+console.log('Network using backend:', net.getBackend());
 ```
 
 To verify WASM is working correctly, run the built-in utility:
