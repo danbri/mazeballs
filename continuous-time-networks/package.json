@@ -1,6 +1,6 @@
 {
   "name": "@mazeballs/ctnet",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "A library for simulating continuous-time dynamical networks",
   "license": "Apache-2.0",
   "main": "dist/ctnet.js",
