@@ -1,6 +1,6 @@
 {
   "name": "@mazeballs/ctnet-experimental",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.1",
   "description": "A library for simulating continuous-time dynamical networks",
   "license": "Apache-2.0",
   "main": "dist/ctnet.js",
@@ -14,15 +14,16 @@
   "files": [
     "dist",
     "src",
-    "LICENSE"
+    "LICENSE",
+    "wasm"
   ],
   "scripts": {
     "build": "rollup -c",
     "clean": "rm -rf dist/",
     "clean:all": "rm -rf dist/ node_modules/",
-    "test": "jest",
-    "test:browser": "open tests/browser/runner.html",
-    "test:wasm": "node tests/check-wasm.js",
+    "test": "npm run build && jest --testTimeout=15000",
+    "test:browser": "npm run build && open tests/browser/runner.html",
+    "test:wasm": "npm run build && node tests/check-wasm.js",
     "publish:patch": "npm version patch && npm publish --tag experimental",
     "publish:minor": "npm version minor && npm publish --tag experimental",
     "publish:alpha": "npm version prerelease --preid=alpha && npm publish --tag experimental",
@@ -36,9 +37,11 @@
     "@tensorflow/tfjs-backend-wasm": "^4.1.0"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^0.4.4",
     "jest": "^29.3.1",
-    "rollup": "^3.7.5",
-    "@rollup/plugin-terser": "^0.4.4"
+    "rollup": "^3.7.5"
   },
   "keywords": [
     "neural-networks",

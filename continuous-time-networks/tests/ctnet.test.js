@@ -4,7 +4,7 @@
 
 // Import required modules
 const tf = require('@tensorflow/tfjs');
-const ctNet = require('../src/ctNet');
+const ctNet = require('../src/ctnet');
 const assert = require('assert');
 
 // Helper function to check if two arrays are approximately equal
@@ -35,9 +35,36 @@ function assertTensorsClose(tensorA, tensorB, epsilon = 1e-5) {
 }
 
 describe('ctNet', function() {
+  // Setup for all tests
+  beforeAll(async () => {
+    // Initialize TensorFlow.js and ensure it's ready
+    await tf.ready();
+    
+    // Initialize WASM backend explicitly
+    try {
+      const tfwasm = require('@tensorflow/tfjs-backend-wasm');
+      const wasmPath = require.resolve('@tensorflow/tfjs-backend-wasm/dist/tfjs-backend-wasm.wasm');
+      const wasmDir = wasmPath.substring(0, wasmPath.lastIndexOf('/') + 1);
+      await tfwasm.setWasmPaths(wasmDir);
+      console.log('WASM initialized in beforeAll');
+      
+      // Make sure WASM is registered before proceeding
+      await tf.setBackend('wasm');
+      console.log('Backend set to:', tf.getBackend());
+    } catch (e) {
+      console.log('WASM initialization error in beforeAll:', e.message);
+      // Fall back to CPU if WASM fails
+      await tf.setBackend('cpu');
+      console.log('Falling back to CPU backend');
+    }
+  });
+  
   // Basic initialization tests
   describe('Initialization', function() {
-    it('should create a network with default parameters', function() {
+    it('should create a network with default parameters', async function() {
+      // Ensure backend is initialized before each test
+      await tf.ready();
+      
       const net = ctNet();
       assert.strictEqual(net.size, 3, 'Default size should be 3');
       assert(net.weights instanceof tf.Tensor, 'Weights should be a tensor');
@@ -45,14 +72,20 @@ describe('ctNet', function() {
       assert.strictEqual(net.weights.shape[1], 3, 'Weights should have correct shape');
     });
     
-    it('should create a network with specified size', function() {
+    it('should create a network with specified size', async function() {
+      // Ensure backend is initialized before each test
+      await tf.ready();
+      
       const net = ctNet(5);
       assert.strictEqual(net.size, 5, 'Size should be 5');
       assert.strictEqual(net.weights.shape[0], 5, 'Weights should have correct shape');
       assert.strictEqual(net.weights.shape[1], 5, 'Weights should have correct shape');
     });
     
-    it('should create a network with specified weights', function() {
+    it('should create a network with specified weights', async function() {
+      // Ensure backend is initialized before each test
+      await tf.ready();
+      
       const weights = [
         [1, 2],
         [3, 4]
@@ -70,7 +103,9 @@ describe('ctNet', function() {
   
   // Manual parameter setting tests
   describe('Parameter Setting', function() {
-    it('should allow manual setting of parameters', function() {
+    it('should allow manual setting of parameters', async function() {
+      await tf.ready();
+      
       const net = ctNet({
         size: 2,
         init_weights: [
@@ -97,7 +132,9 @@ describe('ctNet', function() {
   
   // Beer oscillator test
   describe('Beer Oscillator', function() {
-    it('should configure the Beer oscillator correctly', function() {
+    it('should configure the Beer oscillator correctly', async function() {
+      await tf.ready();
+      
       // Create Beer oscillator
       const net = ctNet({
         size: 2,

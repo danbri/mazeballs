@@ -64,9 +64,18 @@
                                 wasmPath = require.resolve('@tensorflow/tfjs-backend-wasm/dist/tfjs-backend-wasm.wasm');
                             } catch (e) {
                                 // Try common locations
-                                const basePath = path.join(__dirname, '..', 'node_modules', '@tensorflow', 'tfjs-backend-wasm', 'dist');
-                                if (fs.existsSync(path.join(basePath, 'tfjs-backend-wasm.wasm'))) {
-                                    wasmPath = path.join(basePath, 'tfjs-backend-wasm.wasm');
+                                const wasmLocations = [
+                                    // Local wasm directory in package
+                                    path.join(__dirname, '..', 'wasm', 'tfjs-backend-wasm.wasm'),
+                                    // Node modules location
+                                    path.join(__dirname, '..', 'node_modules', '@tensorflow', 'tfjs-backend-wasm', 'dist', 'tfjs-backend-wasm.wasm')
+                                ];
+                                
+                                for (const location of wasmLocations) {
+                                    if (fs.existsSync(location)) {
+                                        wasmPath = location;
+                                        break;
+                                    }
                                 }
                             }
                             

@@ -7,19 +7,20 @@
  * @license Apache-2.0
  */
 
-// Import core module (backends are now integrated into ctNet)
-const ctNet = require('./ctNet');
+// Import core module and helpers
+const ctNet = require('./ctnet'); // Will be bundled by rollup
+const tf = require('@tensorflow/tfjs'); // External dependency, not bundled
 
 // Create a simplified backends API for backward compatibility
 const backends = {
   // Method to check available backends
   getRegisteredBackends: function() {
-    return Object.keys(require('@tensorflow/tfjs').engine().registryFactory);
+    return Object.keys(tf.engine().registryFactory);
   },
   
   // Method to check current backend
   getCurrentBackend: function() {
-    return require('@tensorflow/tfjs').getBackend();
+    return tf.getBackend();
   },
   
   // Method to set backend preferences

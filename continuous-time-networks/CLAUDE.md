@@ -19,7 +19,7 @@ mazeballs/                         # Top-level repository
 │   ├── package.json               # Main package.json for CTNet
 │   ├── CLAUDE.md                  # Development notes and guidelines
 │   ├── src/                       # Source code
-│   │   ├── ctNet.js               # Core implementation
+│   │   ├── ctnet.js               # Core implementation
 │   │   ├── backends.js            # Backend utilities
 │   │   └── index.js               # Main entry point
 │   ├── dist/                      # Built files
@@ -116,7 +116,7 @@ mazeballs/                         # Top-level repository
 4. Helper generators for common simulation patterns
 
 ## Important Notes on API Usage
-The ctNet.js implementation uses a deliberate two-step initialization process:
+The ctnet.js implementation uses a deliberate two-step initialization process:
 1. Create the network with initial configuration (weights, size)
 2. Manually set other parameters after initialization
 
@@ -168,11 +168,33 @@ The package is published to npm as `@mazeballs/ctnet-experimental` with the "exp
 - Publish a minor update: `npm run publish:minor` (e.g., 0.1.0 → 0.2.0)
 - Publish an alpha update: `npm run publish:alpha` (e.g., 0.1.0-alpha.1 → 0.1.0-alpha.2)
 
+With 2FA enabled, you need to add the OTP code:
+```bash
+npm run publish:patch -- --otp=123456
+```
+
 The publish scripts will automatically:
 1. Update the version in package.json
 2. Create a git tag for the version
 3. Build the library
 4. Publish to npm with the "experimental" tag
+
+### WASM Backend Support
+The package includes the WASM binary file in a `wasm` directory, which ensures the WASM backend can work properly when installed from NPM. The code automatically searches for the WASM file in the following locations:
+1. The package's own `wasm` directory
+2. Node modules directory
+
+### Rollup Configuration
+The package uses Rollup with the following plugins to bundle the code:
+- `@rollup/plugin-node-resolve`: Resolves module imports
+- `@rollup/plugin-commonjs`: Converts CommonJS modules to ES modules
+- `@rollup/plugin-terser`: Minifies the code
+
+The build process creates both UMD and ES module formats:
+- `dist/ctnet.js` (UMD)
+- `dist/ctnet.min.js` (UMD, minified)
+- `dist/ctnet.mjs` (ES module)
+- `dist/ctnet.min.mjs` (ES module, minified)
 
 ### Installation from NPM
 Users can install with:

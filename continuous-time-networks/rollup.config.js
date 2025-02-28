@@ -1,9 +1,20 @@
 const terser = require('@rollup/plugin-terser');
+const { nodeResolve } = require('@rollup/plugin-node-resolve');
+const commonjs = require('@rollup/plugin-commonjs');
+
+// List of true external dependencies
+const externals = ['@tensorflow/tfjs', '@tensorflow/tfjs-backend-wasm'];
 
 module.exports = [
   // UMD build
   {
     input: 'src/index.js',
+    plugins: [
+      nodeResolve({
+        preferBuiltins: true
+      }),
+      commonjs()
+    ],
     output: [
       {
         file: 'dist/ctnet.js',
@@ -27,11 +38,17 @@ module.exports = [
         }
       }
     ],
-    external: ['@tensorflow/tfjs', '@tensorflow/tfjs-backend-wasm']
+    external: externals
   },
   // ES module build
   {
     input: 'src/index.js',
+    plugins: [
+      nodeResolve({
+        preferBuiltins: true
+      }),
+      commonjs()
+    ],
     output: [
       {
         file: 'dist/ctnet.mjs',
@@ -45,6 +62,6 @@ module.exports = [
         sourcemap: true
       }
     ],
-    external: ['@tensorflow/tfjs', '@tensorflow/tfjs-backend-wasm']
+    external: externals
   }
 ];
