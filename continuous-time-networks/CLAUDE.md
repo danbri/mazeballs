@@ -109,6 +109,56 @@ mazeballs/                         # Top-level repository
 - TensorFlow.js backend auto-selection follows WebGL → WASM → CPU preference order
 - All backends should produce consistent behavior with the same parameters
 
+### CRITICAL: TensorFlow.js Initialization Pattern
+
+**IMPORTANT**: When using the library in standalone scripts (outside of the testing framework), you MUST follow this exact initialization pattern:
+
+```javascript
+// Import TensorFlow.js first
+const tf = require('@tensorflow/tfjs');
+
+async function main() {
+  // 1. Initialize TensorFlow.js FIRST
+  await tf.ready();
+  
+  // 2. Initialize WASM backend EXPLICITLY
+  try {
+    const tfwasm = require('@tensorflow/tfjs-backend-wasm');
+    const wasmPath = require.resolve('@tensorflow/tfjs-backend-wasm/dist/tfjs-backend-wasm.wasm');
+    const wasmDir = wasmPath.substring(0, wasmPath.lastIndexOf('/') + 1);
+    await tfwasm.setWasmPaths(wasmDir);
+    
+    // Set WASM as active backend
+    await tf.setBackend('wasm');
+    console.log("Using WASM backend");
+  } catch (e) {
+    // Fall back to CPU
+    await tf.setBackend('cpu');
+    console.log("Falling back to CPU backend");
+  }
+  
+  // 3. Import library AFTER TensorFlow.js is fully initialized
+  const { CTNet } = require('@mazeballs/ctnet');
+  
+  // 4. Now create and use the network
+  const net = CTNet({/* config */});
+  
+  // Rest of your code...
+}
+
+main();
+```
+
+Failure to follow this pattern will result in errors like:
+```
+Error: Backend 'wasm' has not yet been initialized. Make sure to await tf.ready() or await tf.setBackend() before calling other methods
+```
+
+The critical points are:
+1. Initialize TensorFlow.js BEFORE importing the library
+2. Set up the WASM backend explicitly
+3. Only then import and use the library
+
 ## API Design Direction
 1. Maintaining separation between network definition and instantiation
 2. Generator-centric API for streaming simulation results
