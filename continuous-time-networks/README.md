@@ -22,10 +22,10 @@ The package is available on npm with an experimental tag:
 
 ```bash
 # Install the experimental version globally
-npm install -g @mazeballs/ctnet-experimental@experimental
+npm install -g @mazeballs/ctnet-experimental
 
 # Or install in a project
-npm install @mazeballs/ctnet-experimental@experimental --save-dev
+npm install @mazeballs/ctnet-experimental --save-dev
 ```
 
 Alternatively, you can install directly from the repository:
