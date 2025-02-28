@@ -161,7 +161,7 @@ This pattern is used consistently in both Node.js and browser implementations, a
 
 ## NPM Publishing Workflow
 
-The package is published to npm as `@mazeballs/ctnet-experimental` with the "experimental" tag.
+The package is published to npm as `@mazeballs/ctnet`.
 
 ### Publishing Commands
 - Publish a patch update: `npm run publish:patch` (e.g., 0.1.0 → 0.1.1)
@@ -177,7 +177,7 @@ The publish scripts will automatically:
 1. Update the version in package.json
 2. Create a git tag for the version
 3. Build the library
-4. Publish to npm with the "experimental" tag
+4. Publish to npm
 
 ### WASM Backend Support
 The package includes the WASM binary file in a `wasm` directory, which ensures the WASM backend can work properly when installed from NPM. The code automatically searches for the WASM file in the following locations:
@@ -199,7 +199,7 @@ The build process creates both UMD and ES module formats:
 ### Installation from NPM
 Users can install with:
 ```bash
-npm install @mazeballs/ctnet-experimental@experimental
+npm install @mazeballs/ctnet
 ```
 
-This creates a globally scoped package that's clearly marked as experimental.
+This creates a globally scoped package under the Mazeballs organization.
