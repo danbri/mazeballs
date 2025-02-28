@@ -157,3 +157,27 @@ This pattern is used consistently in both Node.js and browser implementations, a
 - Test WASM backend: `npm run test:wasm`
 - Clean build output: `npm run clean` (removes dist/ directory)
 - Full cleanup: `npm run clean:all` (removes dist/ and node_modules/, requires npm install afterwards)
+- Watch and rebuild on changes: `npm run dev`
+
+## NPM Publishing Workflow
+
+The package is published to npm as `@mazeballs/ctnet-experimental` with the "experimental" tag.
+
+### Publishing Commands
+- Publish a patch update: `npm run publish:patch` (e.g., 0.1.0 → 0.1.1)
+- Publish a minor update: `npm run publish:minor` (e.g., 0.1.0 → 0.2.0)
+- Publish an alpha update: `npm run publish:alpha` (e.g., 0.1.0-alpha.1 → 0.1.0-alpha.2)
+
+The publish scripts will automatically:
+1. Update the version in package.json
+2. Create a git tag for the version
+3. Build the library
+4. Publish to npm with the "experimental" tag
+
+### Installation from NPM
+Users can install with:
+```bash
+npm install @mazeballs/ctnet-experimental@experimental
+```
+
+This creates a globally scoped package that's clearly marked as experimental.
