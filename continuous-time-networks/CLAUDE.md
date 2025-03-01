@@ -200,6 +200,10 @@ This pattern is used consistently in both Node.js and browser implementations, a
 5. Maintain the integrity of reference implementations, even if they don't oscillate as expected.
 6. ALWAYS CONSULT BEFORE making significant architectural changes (e.g. CommonJS vs ESM, changing build tools, etc.).
 7. DO NOT make changes that would break compatibility with existing code without explicit approval.
+8. NEVER REMOVE DEPENDENCIES OR FEATURES without explicit permission.
+9. WASM backend is REQUIRED functionality. Do not disable or remove WASM support.
+10. ALWAYS FIX bugs by properly addressing the root cause, not by removing functionality.
+11. ALWAYS TEST full functionality after making changes. No code should be committed that doesn't work correctly.
 
 ## Development Commands
 - Run tests: `npm test`

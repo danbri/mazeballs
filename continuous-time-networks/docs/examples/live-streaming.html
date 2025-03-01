@@ -6,8 +6,7 @@
     <title>Live Streaming Oscillator - CTNet Examples</title>
     <link rel="stylesheet" href="../css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
-    <!-- Removing WASM backend to avoid conflicts -->
-    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
     <script src="../js/ctnet.min.js"></script>
     <script>
         // Fix global imports
@@ -19,8 +18,25 @@
                 console.log("Initializing TensorFlow.js...");
                 await tf.ready();
                 console.log("TensorFlow.js ready");
-                await tf.setBackend('cpu');
-                console.log("Backend set to:", tf.getBackend());
+                
+                // Try WASM backend first
+                try {
+                    // Set paths for WASM files
+                    await tf.wasm.setWasmPaths(
+                        'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                    );
+                    
+                    // Register and initialize WASM backend
+                    await tf.setBackend('wasm');
+                    await tf.ready();
+                    console.log("Successfully initialized WASM backend");
+                } catch (wasmError) {
+                    console.warn("WASM initialization failed, falling back to CPU:", wasmError);
+                    await tf.setBackend('cpu');
+                    await tf.ready();
+                }
+                
+                console.log("Active backend:", tf.getBackend());
             } catch (e) {
                 console.error("TensorFlow initialization error:", e);
             }
@@ -405,20 +421,15 @@
                 // Make sure TensorFlow.js is ready
                 await tf.ready();
                 
-                // Wait for TensorFlow to be fully initialized
+                // Ensure TensorFlow is fully initialized
                 await tf.ready();
                 
-                // Force CPU backend for stability and avoid using WASM
-                try {
-                    // Explicitly set the backend to CPU to avoid WASM issues
-                    await tf.setBackend('cpu');
-                    console.log('Successfully set backend to:', tf.getBackend());
-                    document.getElementById('backendType').textContent = tf.getBackend();
-                } catch (backendError) {
-                    console.warn('Failed to set backend:', backendError);
-                }
+                // Use the already initialized backend (either WASM or CPU)
+                const activeBackend = tf.getBackend();
+                console.log('Using active backend for simulation:', activeBackend);
+                document.getElementById('backendType').textContent = activeBackend;
                 
-                // Ensure the backend is ready before continuing
+                // Ensure the backend is stable
                 await tf.ready();
                 
                 // Create the network directly without tf.tidy to avoid backend switching issues
@@ -650,23 +661,16 @@
         // Update memory statistics
         function updateMemoryStats() {
             try {
-                // Make sure we're using a working backend
-                const backend = tf.getBackend();
-                if (backend !== 'cpu') {
-                    try {
-                        // Try to reset the backend if it's not CPU
-                        tf.setBackend('cpu');
-                    } catch (e) {
-                        // Ignore - we'll use the current backend
-                    }
-                }
-                
-                // Get memory info safely
+                // Get memory info safely without changing backend
                 let memoryInfo;
+                const currentBackend = tf.getBackend();
+                
                 try {
                     // Only try to get memory info if backend is set
-                    if (tf.getBackend()) {
+                    if (currentBackend) {
+                        // Using the current backend (wasm or cpu)
                         memoryInfo = tf.engine().memory();
+                        document.getElementById('backendType').textContent = currentBackend;
                     } else {
                         throw new Error("No backend available");
                     }
