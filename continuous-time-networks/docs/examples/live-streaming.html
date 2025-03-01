@@ -418,8 +418,31 @@
                         for await (const result of currentNet.runSimulation()) {
                             // Add data to arrays
                             simulationData.labels.push(step);
-                            simulationData.node1.push(result.outputs_cpu[0]);
-                            simulationData.node2.push(result.outputs_cpu[1]);
+                            
+                            // Safely access data, handling potential backend issues
+                            try {
+                                // First try to get data from outputs_cpu
+                                if (result.outputs_cpu && result.outputs_cpu.length >= 2) {
+                                    simulationData.node1.push(result.outputs_cpu[0]);
+                                    simulationData.node2.push(result.outputs_cpu[1]);
+                                } 
+                                // Fall back to manually extracting tensor data
+                                else if (result.outputs) {
+                                    const outputData = await result.outputs.data();
+                                    simulationData.node1.push(outputData[0]);
+                                    simulationData.node2.push(outputData[1]);
+                                }
+                                else {
+                                    // Last resort fallback
+                                    console.warn("Missing output data at step", step);
+                                    simulationData.node1.push(0);
+                                    simulationData.node2.push(0);
+                                }
+                            } catch (dataError) {
+                                console.warn("Error accessing output data:", dataError);
+                                simulationData.node1.push(0);
+                                simulationData.node2.push(0);
+                            }
                             
                             // Increment the step counter
                             step++;
@@ -472,9 +495,18 @@
             // Clean up TensorFlow memory
             if (currentNet) {
                 try {
-                    // Explicitly dispose tensors if needed
-                    tf.dispose(currentNet.states);
-                    tf.dispose(currentNet.biases);
+                    // Clean up tensors safely
+                    tf.tidy(() => {
+                        if (currentNet.states && currentNet.states.dispose) {
+                            currentNet.states.dispose();
+                        }
+                        if (currentNet.biases && currentNet.biases.dispose) {
+                            currentNet.biases.dispose();
+                        }
+                        // Force garbage collection
+                        tf.engine().endScope();
+                        tf.engine().startScope();
+                    });
                 } catch (e) {
                     console.log('Tensor disposal error:', e);
                 }
@@ -496,8 +528,19 @@
             
             // Force garbage collection
             try {
-                tf.disposeVariables();
-                tf.engine().startScope(); // Start a new scope
+                // Safer memory cleanup
+                tf.tidy(() => {
+                    // Dispose any lingering tensors
+                    tf.disposeVariables();
+                    
+                    // Reset the memory
+                    const backend = tf.getBackend();
+                    tf.setBackend(backend);
+                    
+                    // Start a fresh scope
+                    tf.engine().endScope();
+                    tf.engine().startScope();
+                });
             } catch (e) {
                 console.log('Memory cleanup error:', e);
             }
@@ -554,14 +597,20 @@
         // Update memory statistics
         function updateMemoryStats() {
             try {
-                // Get memory info
-                const memoryInfo = tf.engine().memory();
+                // Get memory info safely
+                let memoryInfo;
+                try {
+                    memoryInfo = tf.engine().memory();
+                } catch (memErr) {
+                    console.warn("Could not access memory info:", memErr);
+                    memoryInfo = { numBytes: 0, numTensors: 0 };
+                }
                 
                 // Calculate memory usage in MB
                 const bytesToMB = 1 / (1024 * 1024);
                 let memoryUsed = 0;
                 
-                if (memoryInfo.numBytes) {
+                if (memoryInfo && memoryInfo.numBytes) {
                     memoryUsed = Math.round(memoryInfo.numBytes * bytesToMB);
                 }
                 
