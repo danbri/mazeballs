@@ -30,10 +30,23 @@
                 await tf.ready();
                 console.log("TensorFlow.js ready");
                 
-                // IMPORTANT: For browser compatibility, force WebGL backend which is the most reliable
-                await tf.setBackend('webgl');
-                await tf.ready();
-                console.log("Using WebGL backend for better stability");
+                // Try WebGL backend first (most reliable for browser)
+                try {
+                    await tf.setBackend('webgl');
+                    await tf.ready();
+                    console.log("Using WebGL backend");
+                } catch (e) {
+                    console.warn("WebGL initialization failed, trying CPU:", e);
+                    
+                    // Fall back to CPU if WebGL fails
+                    try {
+                        await tf.setBackend('cpu');
+                        await tf.ready();
+                        console.log("Using CPU backend");
+                    } catch (cpuErr) {
+                        console.error("All backends failed:", cpuErr);
+                    }
+                }
                 
                 backendInitialized = true;
                 console.log("Active backend:", tf.getBackend());
@@ -437,9 +450,23 @@
                     ]
                 });
                 
-                // Set parameters directly (not in a tidy block)
-                net.states = tf.tensor1d([initialState1, initialState2]);
-                net.biases = tf.tensor1d([bias1, bias2]);
+                // Make sure we're using a stable backend
+                const backend = tf.getBackend();
+                console.log("Creating tensors with backend:", backend);
+                
+                // Create tensors safely
+                try {
+                    net.states = tf.tensor1d([initialState1, initialState2]);
+                    net.biases = tf.tensor1d([bias1, bias2]);
+                } catch (tensorError) {
+                    // If tensor creation fails, try reinitializing backend
+                    console.warn("Tensor creation failed, trying to reinitialize backend:", tensorError);
+                    await initializeTensorFlow();
+                    
+                    // Try again with reinitialized backend
+                    net.states = tf.tensor1d([initialState1, initialState2]);
+                    net.biases = tf.tensor1d([bias1, bias2]);
+                }
                 net.step_size = stepSize;
                 
                 // Save the network
@@ -653,16 +680,28 @@
         // Update memory statistics
         function updateMemoryStats() {
             try {
-                // Get memory info safely without changing backend
+                // Ensure a backend is properly initialized
+                if (!tf.getBackend()) {
+                    await initializeTensorFlow();
+                }
+                
+                // Get memory info safely
                 let memoryInfo;
                 const currentBackend = tf.getBackend();
                 
                 try {
-                    // Only try to get memory info if backend is set
+                    // Only try to get memory info after ensuring backend is set
                     if (currentBackend) {
-                        // Using the current backend (wasm or cpu)
-                        memoryInfo = tf.engine().memory();
+                        // Display which backend we're using
                         document.getElementById('backendType').textContent = currentBackend;
+                        
+                        // Get memory with extra error checking
+                        try {
+                            memoryInfo = tf.engine().memory();
+                        } catch (err) {
+                            console.warn("Memory access failed:", err);
+                            memoryInfo = { numBytes: 0, numTensors: 0 };
+                        }
                     } else {
                         throw new Error("No backend available");
                     }
