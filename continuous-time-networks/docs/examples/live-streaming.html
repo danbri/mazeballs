@@ -12,33 +12,38 @@
         // Fix global imports
         window.CTNet = window.CTNet.CTNet;
         
+        // Flag to avoid duplicate initialization
+        let backendInitialized = false;
+        
         // Initialize TensorFlow.js before anything else runs
         async function initializeTensorFlow() {
+            // Skip if already initialized
+            if (backendInitialized) return;
+            
             try {
                 console.log("Initializing TensorFlow.js...");
                 await tf.ready();
                 console.log("TensorFlow.js ready");
                 
-                // Try WASM backend first
-                try {
-                    // Set paths for WASM files
-                    await tf.wasm.setWasmPaths(
-                        'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
-                    );
-                    
-                    // Register and initialize WASM backend
-                    await tf.setBackend('wasm');
-                    await tf.ready();
-                    console.log("Successfully initialized WASM backend");
-                } catch (wasmError) {
-                    console.warn("WASM initialization failed, falling back to CPU:", wasmError);
-                    await tf.setBackend('cpu');
-                    await tf.ready();
-                }
+                // IMPORTANT: For browser compatibility, force WebGL backend which is the most reliable
+                await tf.setBackend('webgl');
+                await tf.ready();
+                console.log("Using WebGL backend for better stability");
                 
+                backendInitialized = true;
                 console.log("Active backend:", tf.getBackend());
             } catch (e) {
                 console.error("TensorFlow initialization error:", e);
+                
+                // Last resort - try CPU
+                try {
+                    await tf.setBackend('cpu');
+                    await tf.ready();
+                    backendInitialized = true;
+                    console.log("Fallback to CPU backend");
+                } catch (cpuError) {
+                    console.error("All backends failed:", cpuError);
+                }
             }
         }
         
@@ -270,19 +275,8 @@
         
         // Wait for page load
         document.addEventListener('DOMContentLoaded', async function() {
-            // Initialize TensorFlow.js - WASM backend causing issues, disable it
-            try {
-                // First make sure TensorFlow is ready
-                await tf.ready();
-                
-                // Set CPU backend explicitly to avoid WASM errors
-                console.log('Available backends before setup:', tf.engine().registryFactory);
-                await tf.setBackend('cpu');
-                await tf.ready();
-                console.log('Initial setup complete with backend:', tf.getBackend());
-            } catch (e) {
-                console.warn('TensorFlow initialization error:', e);
-            }
+            // Ensure TensorFlow is initialized from the earlier init code
+            await initializeTensorFlow();
             
             // Display current backend
             document.getElementById('backendType').textContent = tf.getBackend() || 'Unknown';
@@ -418,19 +412,16 @@
             const bias2 = parseFloat(document.getElementById('bias2').value);
             
             try {
-                // Make sure TensorFlow.js is ready
+                // Ensure our backend is properly initialized
+                await initializeTensorFlow();
+                
+                // Double-check that TensorFlow is ready with a valid backend
                 await tf.ready();
                 
-                // Ensure TensorFlow is fully initialized
-                await tf.ready();
-                
-                // Use the already initialized backend (either WASM or CPU)
+                // Display which backend we're using
                 const activeBackend = tf.getBackend();
                 console.log('Using active backend for simulation:', activeBackend);
                 document.getElementById('backendType').textContent = activeBackend;
-                
-                // Ensure the backend is stable
-                await tf.ready();
                 
                 // Create the network directly without tf.tidy to avoid backend switching issues
                 const net = CTNet({
@@ -475,40 +466,36 @@
                         // Run a short simulation segment
                         let results = [];
                         try {
+                            // Make sure the backend is still valid
+                            if (!tf.getBackend()) {
+                                await initializeTensorFlow();
+                            }
+                            
+                            // Run within a try-catch for better error handling
                             for await (const result of network.runSimulation()) {
-                                results.push(result);
+                                // Store the result and immediately extract data to avoid backend issues
+                                if (result && result.outputs_cpu) {
+                                    results.push({
+                                        node1: result.outputs_cpu[0],
+                                        node2: result.outputs_cpu[1]
+                                    });
+                                }
                             }
                         } catch (simError) {
                             console.warn("Simulation iteration error:", simError);
+                            
+                            // Try to recover the backend
+                            await tf.ready();
+                            await initializeTensorFlow();
                         }
                         
                         // Process all collected results
                         for (const result of results) {
                             simulationData.labels.push(step);
                             
-                            try {
-                                // Try to get data from outputs_cpu first
-                                if (result.outputs_cpu && result.outputs_cpu.length >= 2) {
-                                    simulationData.node1.push(result.outputs_cpu[0]);
-                                    simulationData.node2.push(result.outputs_cpu[1]);
-                                } 
-                                // Fall back to manually extracting tensor data
-                                else if (result.outputs) {
-                                    const outputData = await result.outputs.data();
-                                    simulationData.node1.push(outputData[0]);
-                                    simulationData.node2.push(outputData[1]);
-                                }
-                                else {
-                                    // Last resort fallback
-                                    console.warn("Missing output data at step", step);
-                                    simulationData.node1.push(0);
-                                    simulationData.node2.push(0);
-                                }
-                            } catch (dataError) {
-                                console.warn("Error accessing output data:", dataError);
-                                simulationData.node1.push(0);
-                                simulationData.node2.push(0);
-                            }
+                            // Data is already extracted and safe to use
+                            simulationData.node1.push(result.node1);
+                            simulationData.node2.push(result.node2);
                             
                             // Increment step and stats
                             step++;
