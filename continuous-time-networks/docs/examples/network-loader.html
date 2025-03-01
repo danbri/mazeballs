@@ -1,4 +1,4 @@
-<\!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
     <script src="../js/ctnet.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.0.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         .chart-container {
             width: 100%;
@@ -84,7 +84,7 @@
         <div class="navigation">
             <a href="basic-oscillator.html" class="button">Previous Example</a>
             <a href="../index.html" class="button">Back to Home</a>
-            <a href="parameter-explorer.html" class="button">Next Example</a>
+            <!-- <a href="parameter-explorer.html" class="button">Next Example</a> -->
         </div>
     </main>
 
@@ -249,7 +249,7 @@
         
         // Run simulation
         async function runSimulation() {
-            if (\!currentNetwork) return;
+            if (!currentNetwork) return;
             
             // Reset data
             resetData();
