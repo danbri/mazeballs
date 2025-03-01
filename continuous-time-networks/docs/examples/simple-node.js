@@ -1,6 +1,7 @@
 /**
  * Demo that follows exact WASM initialization pattern from ctnet.test.js
  */
+//helo world
 
 // Import required modules in the same order as the tests
 const tf = require('@tensorflow/tfjs');
@@ -9,7 +10,7 @@ const tf = require('@tensorflow/tfjs');
 // Main function to ensure everything is properly async
 async function main() {
   try {
-    console.log("Starting initialization...");
+    console.log("[[[[ Starting initialization ]]]]...");
     
     // FIRST: Initialize TensorFlow.js (exactly like the tests)
     await tf.ready();
@@ -71,7 +72,7 @@ async function main() {
         console.log(`Step ${steps}: Outputs =`, result.outputs_cpu);
       }
       
-      if (steps >= 50) break;
+      if (steps >= 50000) break;
     }
     
     console.log("Simulation completed successfully\!");
