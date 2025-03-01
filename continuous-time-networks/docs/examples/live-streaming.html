@@ -6,11 +6,28 @@
     <title>Live Streaming Oscillator - CTNet Examples</title>
     <link rel="stylesheet" href="../css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+    <!-- Removing WASM backend to avoid conflicts -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script> -->
     <script src="../js/ctnet.min.js"></script>
     <script>
         // Fix global imports
         window.CTNet = window.CTNet.CTNet;
+        
+        // Initialize TensorFlow.js before anything else runs
+        async function initializeTensorFlow() {
+            try {
+                console.log("Initializing TensorFlow.js...");
+                await tf.ready();
+                console.log("TensorFlow.js ready");
+                await tf.setBackend('cpu');
+                console.log("Backend set to:", tf.getBackend());
+            } catch (e) {
+                console.error("TensorFlow initialization error:", e);
+            }
+        }
+        
+        // Run initialization immediately
+        initializeTensorFlow();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
@@ -237,19 +254,22 @@
         
         // Wait for page load
         document.addEventListener('DOMContentLoaded', async function() {
-            // Initialize TensorFlow.js
-            await tf.ready();
-            
-            // Initialize CPU backend first for better stability
+            // Initialize TensorFlow.js - WASM backend causing issues, disable it
             try {
+                // First make sure TensorFlow is ready
+                await tf.ready();
+                
+                // Set CPU backend explicitly to avoid WASM errors
+                console.log('Available backends before setup:', tf.engine().registryFactory);
                 await tf.setBackend('cpu');
-                console.log('Initial setup with CPU backend for stability');
+                await tf.ready();
+                console.log('Initial setup complete with backend:', tf.getBackend());
             } catch (e) {
-                console.warn('CPU backend initialization failed:', e);
+                console.warn('TensorFlow initialization error:', e);
             }
             
             // Display current backend
-            document.getElementById('backendType').textContent = tf.getBackend();
+            document.getElementById('backendType').textContent = tf.getBackend() || 'Unknown';
             
             // Initialize chart
             const ctx = document.getElementById('outputChart').getContext('2d');
@@ -385,31 +405,38 @@
                 // Make sure TensorFlow.js is ready
                 await tf.ready();
                 
-                // Force CPU backend for stability
+                // Wait for TensorFlow to be fully initialized
+                await tf.ready();
+                
+                // Force CPU backend for stability and avoid using WASM
                 try {
+                    // Explicitly set the backend to CPU to avoid WASM issues
                     await tf.setBackend('cpu');
+                    console.log('Successfully set backend to:', tf.getBackend());
                     document.getElementById('backendType').textContent = tf.getBackend();
                 } catch (backendError) {
                     console.warn('Failed to set backend:', backendError);
                 }
                 
-                // Create network inside tf.tidy for better memory management
-                currentNet = tf.tidy(() => {
-                    const net = CTNet({
-                        size: 2,
-                        init_weights: [
-                            [4.5, 1.0],
-                            [-1.0, 4.5]
-                        ]
-                    });
-                    
-                    // Set parameters
-                    net.states = tf.tensor1d([initialState1, initialState2]);
-                    net.biases = tf.tensor1d([bias1, bias2]);
-                    net.step_size = stepSize;
-                    
-                    return net;
+                // Ensure the backend is ready before continuing
+                await tf.ready();
+                
+                // Create the network directly without tf.tidy to avoid backend switching issues
+                const net = CTNet({
+                    size: 2,
+                    init_weights: [
+                        [4.5, 1.0],
+                        [-1.0, 4.5]
+                    ]
                 });
+                
+                // Set parameters directly (not in a tidy block)
+                net.states = tf.tensor1d([initialState1, initialState2]);
+                net.biases = tf.tensor1d([bias1, bias2]);
+                net.step_size = stepSize;
+                
+                // Save the network
+                currentNet = net;
                 
                 // Initialize simulation with small run_duration for frequent updates
                 currentNet.run_duration = 5;
@@ -623,10 +650,26 @@
         // Update memory statistics
         function updateMemoryStats() {
             try {
+                // Make sure we're using a working backend
+                const backend = tf.getBackend();
+                if (backend !== 'cpu') {
+                    try {
+                        // Try to reset the backend if it's not CPU
+                        tf.setBackend('cpu');
+                    } catch (e) {
+                        // Ignore - we'll use the current backend
+                    }
+                }
+                
                 // Get memory info safely
                 let memoryInfo;
                 try {
-                    memoryInfo = tf.engine().memory();
+                    // Only try to get memory info if backend is set
+                    if (tf.getBackend()) {
+                        memoryInfo = tf.engine().memory();
+                    } else {
+                        throw new Error("No backend available");
+                    }
                 } catch (memErr) {
                     console.warn("Could not access memory info:", memErr);
                     memoryInfo = { numBytes: 0, numTensors: 0 };
