@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>ctNet Demo</title>
+  </head>
+  <body>
+    <h1>ctNet Demo</h1>
+
+    <canvas id="canvas1" width="500" height="500"></canvas>
+
+    <table id="data-table">
+      <thead>
+        <tr>
+          <th>Node</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="../ctnet-library/dist/ctnet-library.js"></script>
+    <script>
+      async function runSimulation() {
+
+      const size = 2;
+      const net = ctNet({
+        size: 2,
+        init_weights: [
+          [4.5, 1],
+          [-1, 4.5]
+        ]
+      });
+
+      net.states = tf.tensor1d([2, 3]);
+      net.biases = tf.tensor1d([-2.75, -1.75]);
+
+      net.run_duration = 1000;
+      net.step_size = 1;
+      net.name = "Simple 2-Node oscillator.";
+
+       // const net = ctNet({ size });
+        const maxresults = 1000;
+
+        const tbody = d3.select("tbody");
+        const tr = tbody.selectAll("tr")
+          .data(d3.range(size))
+          .join("tr");
+
+        tr.append("td")
+          .text((d) => `Node ${d}`);
+
+        tr.append("td")
+          .attr("id", (d) => `node-${d}`)
+          .text("0");
+
+        for await (const result of net.runSimulation()) {
+          // Update node values in the table
+          const nodeValues = result.states_cpu;
+          for (let i = 0; i < size; i++) {
+            d3.select(`#node-${i}`).text(nodeValues[i].toFixed(3));
+          }
+
+   // Update canvas display in the HTML page
+    const canvas = document.getElementById("canvas1");
+    const ctx = canvas.getContext("2d");
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Define circle properties
+    const circleRadius = 20;
+    const circleColor = "black";
+
+    // Draw circles at each node position
+    for (let i = 0; i < size; i++) {
+      const x = canvas.width / 2;
+      const y = canvas.height / 2 - i * 2.5 * circleRadius;
+      ctx.beginPath();
+      ctx.arc(x, y, circleRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = circleColor;
+      ctx.fill();
+      //ctx.stroke();
+    }
+
+    // Wait for a short time before updating the canvas again
+
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+
+      runSimulation();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Continuous Time Networks - Enhanced Browser Demo</title>
+  
+  <!-- Load TensorFlow.js directly from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+  
+  <!-- Load D3.js for visualization -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.5;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .panel {
+      flex: 1;
+      min-width: 300px;
+      margin: 10px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #output, #sparklines {
+      font-family: monospace;
+    }
+    .node-output {
+      margin-bottom: 15px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    .chart-container {
+      width: 100%;
+      height: 300px;
+      margin-top: 20px;
+    }
+    .line {
+      fill: none;
+      stroke-width: 2px;
+    }
+    .node0 { stroke: #4285F4; } /* Blue */
+    .node1 { stroke: #EA4335; } /* Red */
+    .node2 { stroke: #34A853; } /* Green */
+    .node3 { stroke: #FBBC05; } /* Yellow */
+    
+    select, button {
+      padding: 8px;
+      margin: 5px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: #4285F4;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #3367D6;
+    }
+    .controls {
+      margin: 15px 0;
+    }
+    .node-circle {
+      stroke-width: 2px;
+      stroke: #333;
+    }
+    #network-viz {
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+    .node-label {
+      font-family: sans-serif;
+      font-size: 12px;
+      text-anchor: middle;
+    }
+    .weight-line {
+      stroke-width: 1px;
+      stroke: #999;
+    }
+  </style>
+</head>
+<body>
+  <h1>Continuous Time Networks - Enhanced Browser Demo</h1>
+  <p>Interactive browser demo showing continuous time recurrent neural networks (CTRNNs) with real-time visualization.</p>
+  
+  <div class="controls">
+    <select id="network-select">
+      <option value="2node" selected>2-Node Oscillator (Beer 1995)</option>
+      <option value="3node">3-Node Complex Dynamics</option>
+      <option value="4node">4-Node Oscillatory Network</option>
+    </select>
+    <button id="run-btn">Run Simulation</button>
+    <button id="stop-btn">Stop</button>
+    <button id="reset-btn">Reset</button>
+  </div>
+  
+  <div class="container">
+    <div class="panel">
+      <h2>Network Information</h2>
+      <pre id="network-info">Please select a network and click "Run Simulation"</pre>
+      
+      <h3>Network Visualization</h3>
+      <svg id="network-viz" width="300" height="300"></svg>
+    </div>
+    
+    <div class="panel">
+      <h2>Time Series</h2>
+      <div id="chart-container" class="chart-container"></div>
+    </div>
+  </div>
+  
+  <div class="container">
+    <div class="panel">
+      <h2>Sparklines</h2>
+      <div id="sparklines"></div>
+    </div>
+    
+    <div class="panel">
+      <h2>Node Values</h2>
+      <table id="node-values">
+        <thead>
+          <tr>
+            <th>Node</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  
+  <script type="module">
+    // Import CTNet library
+    const ctNetLibScript = document.createElement('script');
+    ctNetLibScript.src = '../ctnet-library/dist/ctnet-library.js';
+    document.head.appendChild(ctNetLibScript);
+    
+    // Wait for the library to load
+    ctNetLibScript.onload = function() {
+      // Initialize demo
+      initDemo();
+    };
+    
+    function initDemo() {
+      // Network definitions specifically tuned for oscillatory behavior
+      const networkDefs = {
+        '2node': {
+          "size": 2,
+          "init_weights": [
+            [4.5, 1],
+            [-1, 4.5]
+          ],
+          "init_states": [2.0, 3.0],
+          "init_biases": [-2.75, -1.75],
+          "init_taus": [1, 1],
+          "step_size": 0.1,
+          "name": "2-node oscillator (Beer 1995)"
+        },
+        '3node': {
+          "size": 3,
+          "init_weights": [
+            [6.7, -3.5, -0.3],
+            [0.5, 4.3, 1.0],
+            [-1.0, 2.0, 5.5]
+          ],
+          "init_states": [0.1, 0.4, 0.7],
+          "init_biases": [-3.0, -1.0, 0.5],
+          "init_taus": [1.0, 1.5, 2.0],
+          "step_size": 0.1,
+          "name": "3-node complex dynamics"
+        },
+        '4node': {
+          "size": 4,
+          "init_weights": [
+            [4.5001, 1, 0.1, 0],
+            [-1, 4.5, 0, 0.2],
+            [1.1, 0.3, 1, 0.6],
+            [0.3, -0.9, -1, -0.1]
+          ],
+          "init_states": [2, 3, 10, 5],
+          "init_biases": [-2.75, -1.75, 0, 1],
+          "init_taus": [1, 1.1, 5, 2],
+          "step_size": 0.1,
+          "name": "4-node oscillatory network"
+        }
+      };
+      
+      // UI elements
+      const networkSelect = document.getElementById('network-select');
+      const runBtn = document.getElementById('run-btn');
+      const stopBtn = document.getElementById('stop-btn');
+      const resetBtn = document.getElementById('reset-btn');
+      
+      // Global variables
+      let myNet = null;
+      let simulationRunning = false;
+      let animationId = null;
+      let timeSeriesData = [];
+      const maxDataPoints = 100;
+      
+      // Color scheme for nodes
+      const colors = ['#4285F4', '#EA4335', '#34A853', '#FBBC05', '#4B0082', '#FF7F00'];
+      
+      // Convert percentage to sparkline character
+      const sparkify = pc => '▁▂▃▄▅▆▇█'.split('')[Math.floor((pc / 12.5))];
+      
+      // Initialize time series chart
+      function initChart(size) {
+        // Clear previous chart
+        d3.select("#chart-container").html("");
+        
+        // Set up margins and dimensions
+        const margin = {top: 20, right: 30, bottom: 30, left: 40};
+        const width = document.getElementById('chart-container').clientWidth - margin.left - margin.right;
+        const height = document.getElementById('chart-container').clientHeight - margin.top - margin.bottom;
+        
+        // Create SVG
+        const svg = d3.select("#chart-container")
+          .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+          .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        // X axis
+        const x = d3.scaleLinear()
+          .domain([0, maxDataPoints - 1])
+          .range([0, width]);
+        
+        svg.append("g")
+          .attr("transform", `translate(0,${height})`)
+          .attr("class", "x-axis")
+          .call(d3.axisBottom(x));
+        
+        // Y axis
+        const y = d3.scaleLinear()
+          .domain([0, 1])
+          .range([height, 0]);
+        
+        svg.append("g")
+          .attr("class", "y-axis")
+          .call(d3.axisLeft(y));
+        
+        // Create a line generator
+        const line = d3.line()
+          .x((d, i) => x(i))
+          .y(d => y(d));
+        
+        // Add lines for each node
+        for (let i = 0; i < size; i++) {
+          svg.append("path")
+            .datum([])
+            .attr("class", `line node${i}`)
+            .attr("d", line);
+        }
+        
+        // Add legend
+        const legend = svg.append("g")
+          .attr("class", "legend")
+          .attr("transform", `translate(${width - 100}, 10)`);
+        
+        for (let i = 0; i < size; i++) {
+          legend.append("rect")
+            .attr("x", 0)
+            .attr("y", i * 20)
+            .attr("width", 15)
+            .attr("height", 5)
+            .style("fill", colors[i]);
+          
+          legend.append("text")
+            .attr("x", 20)
+            .attr("y", i * 20 + 5)
+            .text(`Node ${i}`)
+            .style("font-size", "12px")
+            .attr("alignment-baseline", "middle");
+        }
+        
+        return {svg, x, y, line, width, height};
+      }
+      
+      // Update time series chart with new data
+      function updateChart(chart, data) {
+        // Update lines with new data
+        for (let i = 0; i < data[0].length; i++) {
+          // Extract data for this node
+          const nodeData = data.map(d => d[i]);
+          
+          // Update line
+          d3.select(`.node${i}`)
+            .datum(nodeData)
+            .attr("d", chart.line);
+        }
+      }
+      
+      // Initialize network visualization
+      function initNetworkViz(net) {
+        // Clear previous visualization
+        d3.select("#network-viz").html("");
+        
+        const svg = d3.select("#network-viz");
+        const width = +svg.attr("width");
+        const height = +svg.attr("height");
+        
+        // Node positions - arranged in a circle
+        const nodePositions = [];
+        const radius = Math.min(width, height) / 2 - 40;
+        const centerX = width / 2;
+        const centerY = height / 2;
+        
+        for (let i = 0; i < net.size; i++) {
+          const angle = (i / net.size) * 2 * Math.PI;
+          nodePositions.push({
+            id: i,
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle)
+          });
+        }
+        
+        // Draw connection lines for weights
+        const weightData = [];
+        const weights = net.weights.arraySync();
+        
+        for (let i = 0; i < net.size; i++) {
+          for (let j = 0; j < net.size; j++) {
+            const weight = weights[i][j];
+            if (Math.abs(weight) > 0.1) { // Only draw significant weights
+              weightData.push({
+                source: nodePositions[i],
+                target: nodePositions[j],
+                weight: weight
+              });
+            }
+          }
+        }
+        
+        // Draw weight lines
+        svg.selectAll(".weight-line")
+          .data(weightData)
+          .enter()
+          .append("line")
+          .attr("class", "weight-line")
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y)
+          .attr("stroke-width", d => Math.abs(d.weight) / 2)
+          .attr("stroke", d => d.weight > 0 ? "#0066cc" : "#cc0000")
+          .attr("opacity", d => Math.min(Math.abs(d.weight) / 5, 1));
+        
+        // Draw nodes
+        svg.selectAll(".node-circle")
+          .data(nodePositions)
+          .enter()
+          .append("circle")
+          .attr("class", "node-circle")
+          .attr("id", d => `node-viz-${d.id}`)
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y)
+          .attr("r", 15)
+          .attr("fill", d => colors[d.id]);
+        
+        // Add node labels
+        svg.selectAll(".node-label")
+          .data(nodePositions)
+          .enter()
+          .append("text")
+          .attr("class", "node-label")
+          .attr("x", d => d.x)
+          .attr("y", d => d.y + 5)
+          .text(d => d.id);
+        
+        return nodePositions;
+      }
+      
+      // Update node visualization based on activation values
+      function updateNetworkViz(nodeValues) {
+        for (let i = 0; i < nodeValues.length; i++) {
+          // Scale opacity based on node activity
+          const opacity = 0.3 + nodeValues[i] * 0.7;
+          d3.select(`#node-viz-${i}`)
+            .transition()
+            .duration(50)
+            .attr("opacity", opacity);
+        }
+      }
+      
+      // Initialize table for node values
+      function initNodeTable(size) {
+        const tbody = d3.select("#node-values tbody");
+        tbody.html("");
+        
+        for (let i = 0; i < size; i++) {
+          const tr = tbody.append("tr");
+          tr.append("td").text(`Node ${i}`);
+          tr.append("td").attr("id", `node-value-${i}`).text("0.000");
+        }
+      }
+      
+      // Update node value table
+      function updateNodeTable(values) {
+        for (let i = 0; i < values.length; i++) {
+          d3.select(`#node-value-${i}`).text(values[i].toFixed(3));
+        }
+      }
+      
+      // Initialize sparklines display
+      function initSparklines(size) {
+        const container = d3.select("#sparklines");
+        container.html("");
+        
+        for (let i = 0; i < size; i++) {
+          container.append("div")
+            .attr("class", "node-output")
+            .html(`<span style="color:${colors[i]}">Node ${i}:</span> <span id="spark-${i}"></span>`);
+        }
+      }
+      
+      // Update sparklines
+      function updateSparklines(allData) {
+        // For each node
+        for (let i = 0; i < allData[0].length; i++) {
+          // Get values for this node across all time steps
+          const nodeData = allData.map(d => d[i]);
+          
+          // Convert to sparklines
+          const sparkline = nodeData.map(v => sparkify(v * 100)).join('');
+          
+          // Update display
+          d3.select(`#spark-${i}`).text(sparkline);
+        }
+      }
+      
+      // Initialize simulation with selected network
+      async function initSimulation() {
+        // Get selected network
+        const selectedNetwork = networkSelect.value;
+        const networkDef = networkDefs[selectedNetwork];
+        
+        // IMPORTANT: Use two-step initialization process to ensure proper CTRNN setup
+        // Step 1: Create basic network with size and weights only
+        myNet = window.ctNet({
+          size: networkDef.size,
+          init_weights: networkDef.init_weights
+        });
+        
+        // Step 2: Manually set all other parameters
+        // This explicit two-step process is necessary for proper oscillation
+        const tf = window.tf;
+        myNet.states = tf.tensor1d(networkDef.init_states);
+        myNet.biases = tf.tensor1d(networkDef.init_biases);
+        myNet.taus = tf.tensor1d(networkDef.init_taus);
+        myNet.step_size = networkDef.step_size;
+        myNet.name = networkDef.name;
+        
+        // Use a consistent small step size for all networks
+        myNet.step_size = 0.01; // Smaller step size for stable oscillation
+        
+        // Display network info
+        document.getElementById('network-info').textContent = 
+          `Name: ${myNet.name}\nSize: ${myNet.size} nodes\nStep size: ${myNet.step_size}\nBiases: [${myNet.biases.arraySync().join(', ')}]\nInitial states: [${myNet.states.arraySync().join(', ')}]`;
+        
+        // Initialize visualization components
+        const chart = initChart(myNet.size);
+        const nodePositions = initNetworkViz(myNet);
+        initNodeTable(myNet.size);
+        initSparklines(myNet.size);
+        
+        return { chart, nodePositions };
+      }
+      
+      // Run the simulation
+      async function runSimulation() {
+        if (simulationRunning) return;
+        
+        simulationRunning = true;
+        timeSeriesData = [];
+        
+        // Initialize
+        const { chart } = await initSimulation();
+        
+        // Create simulation
+        const simulation = myNet.runSimulation();
+        
+        // Set appropriate run duration based on step size
+        // For smaller step sizes, we need more iterations
+        myNet.run_duration = Math.floor(100 / myNet.step_size);
+        
+        // Set up timing to control animation frame rate
+        // This helps ensure we don't run too fast and miss oscillatory patterns
+        const simulationSpeed = 50; // ms between steps - adjust for speed
+        let lastStepTime = 0;
+        
+        // Animation loop
+        async function animate(timestamp) {
+          if (!simulationRunning) return;
+          
+          // Control animation speed - only process new step when enough time has passed
+          if (timestamp - lastStepTime < simulationSpeed) {
+            animationId = requestAnimationFrame(animate);
+            return;
+          }
+          
+          lastStepTime = timestamp;
+          
+          try {
+            // Get next state
+            const result = await simulation.next();
+            
+            if (result.done) {
+              simulationRunning = false;
+              return;
+            }
+            
+            const state = result.value;
+            const nodeValues = state.outputs_cpu;
+            
+            // Add to time series data
+            timeSeriesData.push(nodeValues);
+            
+            // Keep only the last maxDataPoints
+            if (timeSeriesData.length > maxDataPoints) {
+              timeSeriesData.shift();
+            }
+            
+            // Update visualizations
+            updateChart(chart, timeSeriesData);
+            updateNetworkViz(nodeValues);
+            updateNodeTable(nodeValues);
+            updateSparklines(timeSeriesData);
+            
+            // Continue animation
+            animationId = requestAnimationFrame(animate);
+          } catch (error) {
+            console.error("Simulation error:", error);
+            simulationRunning = false;
+          }
+        }
+        
+        // Start animation with timestamp
+        animationId = requestAnimationFrame(animate);
+      }
+      
+      // Stop simulation
+      function stopSimulation() {
+        simulationRunning = false;
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+      }
+      
+      // Event listeners
+      runBtn.addEventListener('click', runSimulation);
+      stopBtn.addEventListener('click', stopSimulation);
+      resetBtn.addEventListener('click', async () => {
+        stopSimulation();
+        await initSimulation();
+      });
+      
+      networkSelect.addEventListener('change', async () => {
+        stopSimulation();
+        await initSimulation();
+      });
+      
+      // Initialize on load
+      initSimulation();
+    }
+  </script>
+</body>
+</html>
