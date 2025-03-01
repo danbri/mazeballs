@@ -30,35 +30,22 @@
                 await tf.ready();
                 console.log("TensorFlow.js ready");
                 
-                // Try backends in order of preference
+                // Try WebGL backend first (most reliable for browser)
                 try {
-                    // Try WebGL first (most reliable for browsers)
-                    try {
-                        await tf.setBackend('webgl');
-                        await tf.ready();
-                        console.log('Using WebGL backend');
-                    } catch (webglError) {
-                        console.warn('WebGL backend failed:', webglError);
-                        
-                        // Try WASM next
-                        try {
-                            await tf.wasm.setWasmPaths(
-                                'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
-                            );
-                            await tf.setBackend('wasm');
-                            await tf.ready();
-                            console.log('Using WASM backend');
-                        } catch (wasmError) {
-                            console.warn('WASM backend failed:', wasmError);
-                            
-                            // Fall back to CPU as last resort
-                            await tf.setBackend('cpu');
-                            await tf.ready();
-                            console.log('Using CPU backend');
-                        }
-                    }
+                    await tf.setBackend('webgl');
+                    await tf.ready();
+                    console.log("Using WebGL backend");
                 } catch (e) {
-                    console.error('All backends failed, using default:', e);
+                    console.warn("WebGL initialization failed, trying CPU:", e);
+                    
+                    // Fall back to CPU if WebGL fails
+                    try {
+                        await tf.setBackend('cpu');
+                        await tf.ready();
+                        console.log("Using CPU backend");
+                    } catch (cpuErr) {
+                        console.error("All backends failed:", cpuErr);
+                    }
                 }
                 
                 backendInitialized = true;
