@@ -167,18 +167,38 @@
             // Initialize TensorFlow.js
             await tf.ready();
             
-            // Initialize WASM backend if available
+            // Try backends in order of preference
             try {
-                await tf.wasm.setWasmPaths(
-                    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
-                );
-                await tf.setBackend('wasm');
-                console.log('Using WASM backend');
+                // Try WebGL first (most reliable for browsers)
+                try {
+                    await tf.setBackend('webgl');
+                    await tf.ready();
+                    console.log('Using WebGL backend');
+                } catch (webglError) {
+                    console.warn('WebGL backend failed:', webglError);
+                    
+                    // Try WASM next
+                    try {
+                        await tf.wasm.setWasmPaths(
+                            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                        );
+                        await tf.setBackend('wasm');
+                        await tf.ready();
+                        console.log('Using WASM backend');
+                    } catch (wasmError) {
+                        console.warn('WASM backend failed:', wasmError);
+                        
+                        // Fall back to CPU as last resort
+                        await tf.setBackend('cpu');
+                        await tf.ready();
+                        console.log('Using CPU backend');
+                    }
+                }
             } catch (e) {
-                console.log('WASM initialization failed, using default backend');
+                console.error('All backends failed, using default:', e);
             }
             
-            console.log('Current backend:', tf.getBackend());
+            console.log('Active backend:', tf.getBackend());
             
             // Initialize chart
             const ctx = document.getElementById('outputChart').getContext('2d');
