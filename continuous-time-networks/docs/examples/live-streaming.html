@@ -240,7 +240,17 @@
             // Initialize TensorFlow.js
             await tf.ready();
             
-            // Initialize WASM backend if available
+            // Initialize CPU backend first for better stability
+            try {
+                await tf.setBackend('cpu');
+                console.log('Initial setup with CPU backend for stability');
+            } catch (e) {
+                console.warn('CPU backend initialization failed:', e);
+            }
+            
+            // Configure alternative backends if CPU is too slow
+            /*
+            // Disabled WASM initialization due to backend compatibility issues
             try {
                 await tf.wasm.setWasmPaths(
                     'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
@@ -250,6 +260,7 @@
             } catch (e) {
                 console.log('WASM initialization failed, using default backend');
             }
+            */
             
             // Display current backend
             document.getElementById('backendType').textContent = tf.getBackend();
@@ -385,19 +396,39 @@
             const bias2 = parseFloat(document.getElementById('bias2').value);
             
             try {
-                // Create network
-                currentNet = CTNet({
-                    size: 2,
-                    init_weights: [
-                        [4.5, 1.0],
-                        [-1.0, 4.5]
-                    ]
-                });
+                // Make sure TensorFlow.js is ready and the backend is properly initialized
+                await tf.ready();
                 
-                // Set parameters
-                currentNet.states = tf.tensor1d([initialState1, initialState2]);
-                currentNet.biases = tf.tensor1d([bias1, bias2]);
-                currentNet.step_size = stepSize;
+                // Force a specific backend to ensure compatibility
+                const currentBackend = tf.getBackend();
+                if (currentBackend !== 'cpu') {
+                    try {
+                        // Try to use CPU backend which is more stable
+                        console.log('Switching to CPU backend for stability');
+                        await tf.setBackend('cpu');
+                    } catch (backendError) {
+                        console.warn('Failed to switch backend:', backendError);
+                    }
+                }
+                
+                // Create network inside a tf.tidy to manage memory
+                currentNet = tf.tidy(() => {
+                    // Create network
+                    const net = CTNet({
+                        size: 2,
+                        init_weights: [
+                            [4.5, 1.0],
+                            [-1.0, 4.5]
+                        ]
+                    });
+                    
+                    // Set parameters
+                    net.states = tf.tensor1d([initialState1, initialState2]);
+                    net.biases = tf.tensor1d([bias1, bias2]);
+                    net.step_size = stepSize;
+                    
+                    return net;
+                });
                 
                 // Initialize simulation - set very small run_duration to get frequent updates
                 currentNet.run_duration = 5;
@@ -414,8 +445,33 @@
                     if (!isStreaming) return;
                     
                     try {
-                        // Run a short segment of simulation
-                        for await (const result of currentNet.runSimulation()) {
+                        // Verify backend state before running
+                        await tf.ready();
+                        
+                        // Create a local copy to avoid race conditions
+                        const network = currentNet;
+                        
+                        // Check network is valid before running
+                        if (!network) {
+                            console.error("Network not initialized");
+                            stopStreaming();
+                            return;
+                        }
+                        
+                        // Run in a try-catch to safely handle any tensor operations
+                        const simulationResults = [];
+                        try {
+                            // Run a short segment of simulation
+                            for await (const result of network.runSimulation()) {
+                                simulationResults.push(result);
+                            }
+                        } catch (simError) {
+                            console.warn("Error in simulation generator:", simError);
+                            // Continue with any results we might have
+                        }
+                        
+                        // Process results outside the iteration loop
+                        for (const result of simulationResults) {
                             // Add data to arrays
                             simulationData.labels.push(step);
                             
@@ -444,14 +500,12 @@
                                 simulationData.node2.push(0);
                             }
                             
-                            // Increment the step counter
-                            step++;
-                            
-                            // Update data points counter
-                            document.getElementById('dataPoints').textContent = step;
-                            
-                            // Count frames for FPS calculation
-                            frameCount++;
+                                // Update data points counter
+                                document.getElementById('dataPoints').textContent = step;
+                                
+                                // Count frames for FPS calculation
+                                frameCount++;
+                            }
                         }
                         
                         // Check if we need to trim excess data
@@ -460,8 +514,9 @@
                         // Update chart
                         updateChart();
                         
-                        // Continue the simulation after a short delay
-                        streamingTask = setTimeout(simulationLoop, 0);
+                        // Introduce a slight delay to prevent browser freezing
+                        // and allow other UI operations to proceed
+                        streamingTask = setTimeout(simulationLoop, 10);
                         
                     } catch (error) {
                         console.error('Simulation error:', error);
