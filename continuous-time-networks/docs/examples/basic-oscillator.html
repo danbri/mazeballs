@@ -1,0 +1,318 @@
+<\!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Oscillator - CTNet Examples</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+    <script src="../js/ctnet.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.0.0/dist/chart.umd.min.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin: 20px 0;
+        }
+        .control-panel {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Basic Oscillator</h1>
+            <p class="tagline">A simple two-node oscillatory network</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <p>
+            This example demonstrates a basic two-node oscillator network using the Beer (1995) parameters.
+            You can adjust the parameters and see how they affect the network's behavior.
+        </p>
+
+        <div class="control-panel">
+            <div class="control-group">
+                <label for="stepSize">Step Size:</label>
+                <input type="range" id="stepSize" min="0.001" max="0.1" step="0.001" value="0.01">
+                <span id="stepSizeValue">0.01</span>
+            </div>
+            <div class="control-group">
+                <label for="initialState1">Initial State 1:</label>
+                <input type="range" id="initialState1" min="0" max="1" step="0.01" value="0.1">
+                <span id="initialState1Value">0.1</span>
+            </div>
+            <div class="control-group">
+                <label for="initialState2">Initial State 2:</label>
+                <input type="range" id="initialState2" min="0" max="1" step="0.01" value="0.5">
+                <span id="initialState2Value">0.5</span>
+            </div>
+            <div class="control-group">
+                <label for="bias1">Bias 1:</label>
+                <input type="range" id="bias1" min="-5" max="5" step="0.05" value="-2.75">
+                <span id="bias1Value">-2.75</span>
+            </div>
+            <div class="control-group">
+                <label for="bias2">Bias 2:</label>
+                <input type="range" id="bias2" min="-5" max="5" step="0.05" value="-1.75">
+                <span id="bias2Value">-1.75</span>
+            </div>
+            <button id="runButton">Run Simulation</button>
+            <button id="resetButton">Reset</button>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="outputChart"></canvas>
+        </div>
+
+        <h2>Network Configuration</h2>
+        <pre><code>Weights = [
+  [4.5, 1.0],
+  [-1.0, 4.5]
+]
+
+States = [initialState1, initialState2]
+Biases = [bias1, bias2]
+Step Size = stepSize</code></pre>
+
+        <h2>How It Works</h2>
+        <p>
+            This network creates a simple oscillatory pattern based on the two-neuron model 
+            described by Beer (1995). The oscillation emerges from the specific pattern of 
+            connection weights, which create a feedback loop between the two neurons.
+        </p>
+        <p>
+            The dynamics follow this continuous-time equation:
+            <br>
+            <code>τy' = -y + Wσ(g*(y+ θ)) + I</code>
+        </p>
+        <p>
+            For a detailed explanation of CTRNNs, see the 
+            <a href="https://pages.cs.wisc.edu/~bpico/courses/cs838/handouts/dynamical_systems.pdf">
+                Introduction to Dynamic Neural Networks
+            </a> paper.
+        </p>
+
+        <div class="navigation">
+            <a href="../index.html" class="button">Back to Home</a>
+            <a href="network-loader.html" class="button">Next Example</a>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Mazeballs Contributors. Licensed under the Apache 2.0 License.</p>
+            <p>
+                <a href="https://github.com/danbri/mazeballs">GitHub Repository</a> |
+                <a href="https://www.npmjs.com/package/@mazeballs/ctnet">NPM Package</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize empty chart
+        let outputChart;
+        let simulationData = {
+            labels: [],
+            node1: [],
+            node2: []
+        };
+        
+        // Wait for page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize TensorFlow.js
+            await tf.ready();
+            
+            // Initialize WASM backend if available
+            try {
+                await tf.wasm.setWasmPaths(
+                    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                );
+                await tf.setBackend('wasm');
+                console.log('Using WASM backend');
+            } catch (e) {
+                console.log('WASM initialization failed, using default backend');
+            }
+            
+            console.log('Current backend:', tf.getBackend());
+            
+            // Initialize chart
+            const ctx = document.getElementById('outputChart').getContext('2d');
+            outputChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Node 1',
+                            data: [],
+                            borderColor: 'rgb(46, 125, 50)',
+                            tension: 0.1,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Node 2',
+                            data: [],
+                            borderColor: 'rgb(33, 150, 243)',
+                            tension: 0.1,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time Steps'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Output Value'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Connect controls
+            const stepSizeSlider = document.getElementById('stepSize');
+            const stepSizeValue = document.getElementById('stepSizeValue');
+            stepSizeSlider.addEventListener('input', function() {
+                stepSizeValue.textContent = this.value;
+            });
+            
+            const initialState1Slider = document.getElementById('initialState1');
+            const initialState1Value = document.getElementById('initialState1Value');
+            initialState1Slider.addEventListener('input', function() {
+                initialState1Value.textContent = this.value;
+            });
+            
+            const initialState2Slider = document.getElementById('initialState2');
+            const initialState2Value = document.getElementById('initialState2Value');
+            initialState2Slider.addEventListener('input', function() {
+                initialState2Value.textContent = this.value;
+            });
+            
+            const bias1Slider = document.getElementById('bias1');
+            const bias1Value = document.getElementById('bias1Value');
+            bias1Slider.addEventListener('input', function() {
+                bias1Value.textContent = this.value;
+            });
+            
+            const bias2Slider = document.getElementById('bias2');
+            const bias2Value = document.getElementById('bias2Value');
+            bias2Slider.addEventListener('input', function() {
+                bias2Value.textContent = this.value;
+            });
+            
+            // Connect buttons
+            document.getElementById('runButton').addEventListener('click', runSimulation);
+            document.getElementById('resetButton').addEventListener('click', resetSimulation);
+        });
+        
+        // Run simulation
+        async function runSimulation() {
+            // Reset data
+            resetData();
+            
+            // Disable run button
+            document.getElementById('runButton').disabled = true;
+            
+            // Get parameters from controls
+            const stepSize = parseFloat(document.getElementById('stepSize').value);
+            const initialState1 = parseFloat(document.getElementById('initialState1').value);
+            const initialState2 = parseFloat(document.getElementById('initialState2').value);
+            const bias1 = parseFloat(document.getElementById('bias1').value);
+            const bias2 = parseFloat(document.getElementById('bias2').value);
+            
+            try {
+                // Create network
+                const net = CTNet({
+                    size: 2,
+                    init_weights: [
+                        [4.5, 1.0],
+                        [-1.0, 4.5]
+                    ]
+                });
+                
+                // Set parameters
+                net.states = tf.tensor1d([initialState1, initialState2]);
+                net.biases = tf.tensor1d([bias1, bias2]);
+                net.step_size = stepSize;
+                net.run_duration = 500;
+                
+                // Run simulation
+                let step = 0;
+                
+                for await (const result of net.runSimulation()) {
+                    // Add data to chart
+                    simulationData.labels.push(step);
+                    simulationData.node1.push(result.outputs_cpu[0]);
+                    simulationData.node2.push(result.outputs_cpu[1]);
+                    
+                    // Update chart every few steps
+                    if (step % 5 === 0) {
+                        updateChart();
+                    }
+                    
+                    step++;
+                    
+                    // Break after 500 steps
+                    if (step >= 500) break;
+                }
+                
+                // Final chart update
+                updateChart();
+                
+            } catch (error) {
+                console.error('Simulation error:', error);
+                alert('Error running simulation. See console for details.');
+            }
+            
+            // Re-enable run button
+            document.getElementById('runButton').disabled = false;
+        }
+        
+        // Reset simulation
+        function resetSimulation() {
+            resetData();
+            updateChart();
+        }
+        
+        // Reset data
+        function resetData() {
+            simulationData = {
+                labels: [],
+                node1: [],
+                node2: []
+            };
+        }
+        
+        // Update chart with current data
+        function updateChart() {
+            outputChart.data.labels = simulationData.labels;
+            outputChart.data.datasets[0].data = simulationData.node1;
+            outputChart.data.datasets[1].data = simulationData.node2;
+            outputChart.update();
+        }
+    </script>
+</body>
+</html>

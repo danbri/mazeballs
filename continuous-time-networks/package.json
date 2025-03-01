@@ -29,7 +29,13 @@
     "publish:alpha": "npm version prerelease --preid=alpha && npm publish --tag alpha",
     "prepublishOnly": "npm run build",
     "lint": "echo 'No linter configured yet'",
-    "docs": "echo 'No documentation generator configured yet'",
+    "docs:prepare": "mkdir -p docs/{css,js,examples,api}",
+    "docs:copy-demos": "cp -r demos/* docs/examples/ 2>/dev/null || echo 'No demos to copy'",
+    "docs:copy-networks": "cp -r networks docs/networks 2>/dev/null || echo 'No networks to copy'",
+    "docs:copy-lib": "mkdir -p docs/js && cp -r dist/* docs/js/",
+    "docs:build": "npm run build && npm run docs:prepare && npm run docs:copy-demos && npm run docs:copy-networks && npm run docs:copy-lib",
+    "docs:serve": "npx http-server docs",
+    "docs:deploy": "npm run docs:build && gh-pages -d docs",
     "dev": "rollup -c -w"
   },
   "dependencies": {
