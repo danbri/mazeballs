@@ -3,6 +3,8 @@
 A JavaScript library for simulating continuous-time dynamical networks, with support for browser and Node.js environments. 
 This library implements CTRNNs (Continuous-Time Recurrent Neural Networks) with TensorFlow.js for fast simulation.
 
+See also [docs](https://danbri.github.io/mazeballs/) site.
+
 ## Features
 
 - Fast simulation of continuous-time networks using TensorFlow.js
