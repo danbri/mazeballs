@@ -34,7 +34,8 @@
     "docs:copy-networks": "cp -r networks docs/networks 2>/dev/null || echo 'No networks to copy'",
     "docs:copy-lib": "mkdir -p docs/js && cp -r dist/* docs/js/",
     "docs:build": "npm run build && npm run docs:prepare && npm run docs:copy-demos && npm run docs:copy-networks && npm run docs:copy-lib",
-    "docs:serve": "npx http-server docs",
+    "docs:serve": "npx http-server docs -p 8080 -o",
+    "docs:serve-local": "npx http-server docs -p 8080 --no-open",
     "docs:deploy": "npm run docs:build && gh-pages -d docs",
     "dev": "rollup -c -w"
   },

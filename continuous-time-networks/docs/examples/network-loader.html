@@ -9,8 +9,13 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
     <script src="../js/ctnet.min.js"></script>
     <script>
-        // Fix global imports
-        window.CTNet = window.CTNet.CTNet;
+        // Fix global imports - handle different packaging formats
+        if (window.CTNet && window.CTNet.CTNet) {
+            window.CTNet = window.CTNet.CTNet;
+        } else if (typeof CTNet === "undefined" && window.ctnet) {
+            // Support lowercase name
+            window.CTNet = window.ctnet;
+        }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>

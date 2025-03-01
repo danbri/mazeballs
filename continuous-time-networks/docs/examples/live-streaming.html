@@ -9,11 +9,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
     <script src="../js/ctnet.min.js"></script>
     <script>
-        // Fix global imports
-        window.CTNet = window.CTNet.CTNet;
+        // Fix global imports - handle different packaging formats
+        var backendInitialized = false;
         
-        // Flag to avoid duplicate initialization
-        let backendInitialized = false;
+        // Check for different possible locations of CTNet
+        if (window.CTNet && window.CTNet.CTNet) {
+            window.CTNet = window.CTNet.CTNet;
+        } else if (typeof CTNet === "undefined" && window.ctnet) {
+            // Support lowercase name
+            window.CTNet = window.ctnet;
+        }
         
         // Initialize TensorFlow.js before anything else runs
         async function initializeTensorFlow() {
