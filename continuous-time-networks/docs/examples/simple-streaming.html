@@ -5,18 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple Streaming Oscillator - CTNet Examples</title>
     <link rel="stylesheet" href="../css/styles.css">
+    <!-- Only load TensorFlow.js and Chart.js initially -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
-    <script src="../js/ctnet.min.js"></script>
-    <script>
-        // Fix global imports - handle different packaging formats
-        if (window.CTNet && window.CTNet.CTNet) {
-            window.CTNet = window.CTNet.CTNet;
-        } else if (typeof CTNet === "undefined" && window.ctnet) {
-            // Support lowercase name
-            window.CTNet = window.ctnet;
-        }
-    </script>
+    <!-- CTNet will be loaded dynamically AFTER TensorFlow is initialized -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         .chart-container {
@@ -207,12 +199,29 @@
         let windowSize = 200;
         let maxDataPoints = 5000;
         
+        // Helper to dynamically load scripts
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+        
+        // Global variable for CTNet
+        let CTNet;
+        
         // Wait for page load
         document.addEventListener('DOMContentLoaded', async function() {
-            // Initialize TensorFlow.js
-            await tf.ready();
+            console.log('DOM loaded, initializing TensorFlow.js...');
             
-            // Initialize WASM backend if available - copied from working examples
+            // STEP 1: Initialize TensorFlow.js FIRST
+            await tf.ready();
+            console.log('TensorFlow.js initialized');
+            
+            // STEP 2: Initialize WASM backend
             try {
                 await tf.wasm.setWasmPaths(
                     'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
@@ -220,11 +229,39 @@
                 await tf.setBackend('wasm');
                 console.log('Using WASM backend');
             } catch (e) {
-                console.log('WASM initialization failed, using default backend');
+                console.log('WASM initialization failed, using default backend:', e.message);
             }
             
+            // Log the current backend
             console.log('Current backend:', tf.getBackend());
             document.getElementById('backendType').textContent = tf.getBackend();
+            
+            // STEP 3: Load CTNet library AFTER TensorFlow.js is initialized
+            console.log('Loading CTNet library...');
+            try {
+                await loadScript('../js/ctnet.min.js');
+                console.log('CTNet library loaded');
+                
+                // Set global CTNet reference
+                if (window.CTNet && window.CTNet.CTNet) {
+                    CTNet = window.CTNet.CTNet;
+                } else if (typeof CTNet === "undefined" && window.ctnet) {
+                    CTNet = window.ctnet;
+                } else {
+                    CTNet = window.CTNet;
+                }
+                
+                if (!CTNet) {
+                    throw new Error("Could not find CTNet constructor");
+                }
+                
+                console.log('CTNet initialized successfully');
+            } catch (error) {
+                console.error('Failed to load CTNet:', error);
+                alert('Error loading CTNet library: ' + error.message);
+                document.getElementById('backendType').textContent = 'Error';
+                return;
+            }
             
             // Initialize chart
             const ctx = document.getElementById('outputChart').getContext('2d');
@@ -368,8 +405,8 @@
                 net.biases = tf.tensor1d([bias1, bias2]);
                 net.step_size = stepSize;
                 
-                // Use smaller run_duration for more frequent updates
-                net.run_duration = 10;
+                // Use larger run_duration to avoid generator reinitialization issues
+                net.run_duration = 5000; // Run a single generator for much longer
                 
                 // Save the network for later access
                 currentNet = net;
@@ -496,7 +533,7 @@
             outputChart.update();
         }
         
-        // Update memory statistics
+        // Update memory statistics with detailed GPU info
         function updateMemoryStats() {
             try {
                 // Get memory info if possible
@@ -507,20 +544,45 @@
                     const bytesToMB = 1 / (1024 * 1024);
                     const memoryUsed = Math.round(memoryInfo.numBytes * bytesToMB);
                     
+                    // Get more detailed memory info if available
+                    let memoryDetails = '';
+                    
+                    // For WebGL/GPU backends
+                    if (tf.getBackend() === 'webgl' && memoryInfo.numBytesInGPU !== undefined) {
+                        const gpuMemUsed = Math.round(memoryInfo.numBytesInGPU * bytesToMB);
+                        memoryDetails = ` (GPU: ${gpuMemUsed} MB)`;
+                    }
+                    
+                    // For all backends, show tensor count
+                    const tensorCount = tf.memory().numTensors;
+                    memoryDetails += ` [${tensorCount} tensors]`;
+                    
                     // Update display
-                    document.getElementById('memoryUsed').textContent = memoryUsed + ' MB';
+                    document.getElementById('memoryUsed').textContent = memoryUsed + ' MB' + memoryDetails;
+                    
+                    // Try to get unreleased tensors
+                    let unreleased = 0;
+                    if (memoryInfo.unreliable) {
+                        unreleased = memoryInfo.numTensors - memoryInfo.numDataBuffers;
+                        console.log(`Possible unreleased tensors: ${unreleased}`);
+                    }
                     
                     // Update bar (assuming 1GB max)
                     const memoryPercent = (memoryUsed / 1000) * 100;
                     document.getElementById('memoryFill').style.width = memoryPercent + '%';
                     
                     // Change color based on usage
-                    if (memoryPercent > 80) {
+                    if (memoryPercent > 80 || unreleased > 50) {
                         document.getElementById('memoryFill').style.backgroundColor = '#f44336'; // Red
-                    } else if (memoryPercent > 60) {
+                    } else if (memoryPercent > 60 || unreleased > 20) {
                         document.getElementById('memoryFill').style.backgroundColor = '#ff9800'; // Orange
                     } else {
                         document.getElementById('memoryFill').style.backgroundColor = '#4caf50'; // Green
+                    }
+                    
+                    // Log memory usage periodically to monitor for leaks
+                    if (totalSteps % 100 === 0) {
+                        console.log(`Memory at step ${totalSteps}: ${memoryUsed}MB, Tensors: ${tensorCount}`);
                     }
                 }
             } catch (e) {

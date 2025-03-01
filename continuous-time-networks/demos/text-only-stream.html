@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-Only Streaming Demo - CTNet</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: #0c0c0c;
+            color: #33ff33;
+        }
+        #output {
+            width: 100%;
+            height: 400px;
+            overflow-y: scroll;
+            background-color: #000;
+            border: 1px solid #33ff33;
+            padding: 10px;
+            margin-bottom: 20px;
+            white-space: pre;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #000;
+            color: #33ff33;
+            border: 1px solid #33ff33;
+            padding: 8px 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #33ff33;
+            color: #000;
+        }
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>CTNet Text-Only Streaming Demo</h1>
+    <p>This demo uses the correct TensorFlow.js initialization pattern.</p>
+    
+    <div class="controls">
+        <button id="startBtn">Start Streaming</button>
+        <button id="stopBtn">Stop Streaming</button>
+        <button id="clearBtn">Clear Output</button>
+        
+        <div class="status">Status: <span id="statusText">Ready</span></div>
+        <div class="status">Backend: <span id="backendText">Initializing...</span></div>
+        <div class="status">Simulation Steps: <span id="stepsText">0</span></div>
+    </div>
+    
+    <div id="output">
+        --- Initializing ---
+    </div>
+    
+    <!-- IMPORTANT: Only load TensorFlow.js - DO NOT load ctnet.min.js here -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+
+    <script>
+        // Get DOM elements
+        const output = document.getElementById('output');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusText = document.getElementById('statusText');
+        const backendText = document.getElementById('backendText');
+        const stepsText = document.getElementById('stepsText');
+        
+        // Simulation variables
+        let isStreaming = false;
+        let CTNet;
+        let currentNet;
+        let simulationTask;
+        let totalSteps = 0;
+        let maxLines = 100;
+        
+        // Initialize TensorFlow.js and then load CTNet
+        async function initialize() {
+            try {
+                log("Initializing TensorFlow.js...");
+                
+                // STEP 1: Initialize TensorFlow.js FIRST
+                await tf.ready();
+                log("TensorFlow.js initialized");
+                
+                // STEP 2: Initialize WASM backend
+                try {
+                    await tf.wasm.setWasmPaths(
+                        'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                    );
+                    await tf.setBackend('wasm');
+                    log("WASM backend initialized successfully");
+                } catch (e) {
+                    log("WASM initialization failed: " + e.message);
+                    log("Falling back to default backend");
+                }
+                
+                const backend = tf.getBackend();
+                backendText.textContent = backend;
+                log(`Using TensorFlow.js backend: ${backend}`);
+                
+                // STEP 3: Load CTNet library AFTER TensorFlow is initialized
+                log("Loading CTNet library...");
+                await loadScript("../js/ctnet.min.js");
+                log("CTNet library loaded");
+                
+                // STEP 4: Set global CTNet reference
+                if (window.CTNet && window.CTNet.CTNet) {
+                    CTNet = window.CTNet.CTNet;
+                } else if (typeof CTNet === "undefined" && window.ctnet) {
+                    CTNet = window.ctnet;
+                } else {
+                    CTNet = window.CTNet;
+                }
+                
+                if (!CTNet) {
+                    throw new Error("Could not find CTNet constructor");
+                }
+                
+                log("Initialization complete. Ready to start simulation.");
+                statusText.textContent = "Ready";
+                startBtn.disabled = false;
+            } catch (error) {
+                log("ERROR: " + error.message);
+                statusText.textContent = "Error";
+            }
+        }
+        
+        // Helper to dynamically load scripts
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+        
+        // Add text to the output area
+        function log(text) {
+            const now = new Date();
+            const timestamp = now.toISOString().substr(11, 8);
+            const line = `[${timestamp}] ${text}`;
+            
+            // Add new line
+            output.textContent += "\n" + line;
+            
+            // Limit number of lines
+            const lines = output.textContent.split("\n");
+            if (lines.length > maxLines) {
+                output.textContent = lines.slice(lines.length - maxLines).join("\n");
+            }
+            
+            // Scroll to bottom
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        // Start the streaming simulation
+        async function startStreaming() {
+            if (isStreaming) return;
+            
+            try {
+                isStreaming = true;
+                statusText.textContent = "Streaming";
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+                log("Creating network...");
+                
+                // Create network
+                currentNet = CTNet({
+                    size: 2,
+                    init_weights: [
+                        [4.5, 1.0],
+                        [-1.0, 4.5]
+                    ]
+                });
+                
+                // Set parameters
+                currentNet.states = tf.tensor1d([0.1, 0.5]);
+                currentNet.biases = tf.tensor1d([-2.75, -1.75]);
+                currentNet.step_size = 0.01;
+                currentNet.run_duration = 5000; // Use a larger value to avoid reinitialization issues
+                
+                log("Network created");
+                log("Running simulation in segments...");
+                
+                // Run simulation in segments
+                runSegment();
+            } catch (error) {
+                log("ERROR: " + error.message);
+                statusText.textContent = "Error";
+                isStreaming = false;
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+        
+        // Track steps completed in the current generator
+        let generatorSteps = 0;
+        
+        // Run a segment of the simulation
+        async function runSegment() {
+            if (!isStreaming) return;
+            
+            try {
+                log("Running segment...");
+                
+                // Check if we need to reinitialize the generator
+                if (generatorSteps >= 4800) { // Reinitialize before hitting the limit
+                    log("Approaching run_duration limit, reinitializing simulator...");
+                    
+                    // Save current states to ensure continuity
+                    const currentStates = currentNet.states.arraySync();
+                    
+                    // Recreate the network with the same parameters
+                    currentNet = CTNet({
+                        size: 2,
+                        init_weights: [
+                            [4.5, 1.0],
+                            [-1.0, 4.5]
+                        ]
+                    });
+                    
+                    // Restore states and parameters
+                    currentNet.states = tf.tensor1d(currentStates);
+                    currentNet.biases = tf.tensor1d([-2.75, -1.75]);
+                    currentNet.step_size = 0.01;
+                    currentNet.run_duration = 5000;
+                    
+                    // Reset generator step counter
+                    generatorSteps = 0;
+                    log("Simulator reinitialized with preserved state");
+                }
+                
+                // Run a short segment
+                let segmentCompleted = false;
+                try {
+                    for await (const result of currentNet.runSimulation()) {
+                        totalSteps++;
+                        generatorSteps++;
+                        stepsText.textContent = totalSteps;
+                        
+                        // Only log every 10 steps to avoid flooding
+                        if (totalSteps % 10 === 0) {
+                            const values = result.outputs_cpu.map(v => v.toFixed(4)).join(", ");
+                            log(`Step ${totalSteps}: [${values}]`);
+                        }
+                        
+                        // Regularly log memory usage
+                        if (totalSteps % 100 === 0) {
+                            const memInfo = tf.memory();
+                            log(`Memory: ${Math.round(memInfo.numBytes/(1024*1024))}MB, ${memInfo.numTensors} tensors`);
+                        }
+                    }
+                    segmentCompleted = true;
+                } catch (error) {
+                    if (error.message.includes('backend')) {
+                        // Handle backend error gracefully by reinitializing
+                        log("Backend issue detected, reinitializing TensorFlow...");
+                        
+                        // Reload the TensorFlow.js environment
+                        try {
+                            // Initialize TensorFlow.js again
+                            await tf.ready();
+                            await tf.wasm.setWasmPaths(
+                                'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                            );
+                            await tf.setBackend('wasm');
+                            
+                            // Reinitialize the network
+                            currentNet = CTNet({
+                                size: 2,
+                                init_weights: [
+                                    [4.5, 1.0],
+                                    [-1.0, 4.5]
+                                ]
+                            });
+                            
+                            // Reset with default parameters
+                            currentNet.states = tf.tensor1d([0.1, 0.5]);
+                            currentNet.biases = tf.tensor1d([-2.75, -1.75]);
+                            currentNet.step_size = 0.01;
+                            currentNet.run_duration = 5000;
+                            
+                            // Reset generator step counter
+                            generatorSteps = 0;
+                            log("Successfully recovered from backend error");
+                        } catch (reinitError) {
+                            // If reinitialization fails, stop streaming
+                            throw new Error("Failed to recover: " + reinitError.message);
+                        }
+                    } else {
+                        // For other errors, propagate them
+                        throw error;
+                    }
+                }
+                
+                // Schedule next segment if still streaming
+                if (isStreaming) {
+                    simulationTask = setTimeout(runSegment, 100);
+                    log("Segment complete, scheduling next...");
+                }
+            } catch (error) {
+                log("ERROR in simulation: " + error.message);
+                statusText.textContent = "Error";
+                isStreaming = false;
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+        
+        // Stop the streaming simulation
+        function stopStreaming() {
+            isStreaming = false;
+            statusText.textContent = "Stopped";
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            if (simulationTask) {
+                clearTimeout(simulationTask);
+                simulationTask = null;
+            }
+            
+            log("Streaming stopped");
+        }
+        
+        // Clear the output area
+        function clearOutput() {
+            output.textContent = "--- Output Cleared ---";
+            log("Ready to stream");
+        }
+        
+        // Connect event handlers
+        startBtn.addEventListener('click', startStreaming);
+        stopBtn.addEventListener('click', stopStreaming);
+        clearBtn.addEventListener('click', clearOutput);
+        
+        // Start initialization when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+            initialize();
+        });
+    </script>
+</body>
+</html>
