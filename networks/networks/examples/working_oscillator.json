@@ -1,0 +1,13 @@
+{
+    "size": 2,
+    "init_weights": [
+        [4.5, 1.0],
+        [-1.0, 4.5]
+    ],
+    "init_states": [0.1, 0.5],
+    "init_biases": [-2.75, -1.75],
+    "init_taus": [1, 1],
+    "step_size": 0.2,
+    "run_duration": 1000,
+    "name": "Working oscillator"
+}

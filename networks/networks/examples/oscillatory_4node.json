@@ -1,0 +1,14 @@
+{
+    "size": 4,
+    "init_weights": [
+        [4.5001, 1, 0.1, 0],
+        [-1, 4.5, 0, 0.2],
+        [1.1, 0.3, 1, 0.6],
+        [0.3, -0.9, -1, -0.1]
+    ],
+    "init_states": [2, 3, 10, 5],
+    "init_biases": [-2.75, -1.75, 0, 1],
+    "init_taus": [1, 1.1, 5, 2],
+    "step_size": 0.1,
+    "name": "4-node oscillatory network"
+}

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Loader - CTNet Examples</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+    <script src="../js/ctnet.min.js"></script>
+    <script>
+        // Fix global imports - handle different packaging formats
+        if (window.CTNet && window.CTNet.CTNet) {
+            window.CTNet = window.CTNet.CTNet;
+        } else if (typeof CTNet === "undefined" && window.ctnet) {
+            // Support lowercase name
+            window.CTNet = window.ctnet;
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin: 20px 0;
+        }
+        .control-panel {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .network-selector {
+            margin-bottom: 20px;
+        }
+        .network-info {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        pre {
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Network Loader</h1>
+            <p class="tagline">Load and simulate different network configurations</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <p>
+            This example demonstrates loading and simulating different pre-defined network configurations.
+            Select a network from the dropdown and click "Load Network" to view its parameters and behavior.
+        </p>
+
+        <div class="control-panel">
+            <div class="network-selector">
+                <label for="networkSelect">Select Network:</label>
+                <select id="networkSelect">
+                    <option value="beer_2node_osc">Beer 2-Node Oscillator</option>
+                    <option value="oscillatory_4node">4-Node Oscillator</option>
+                    <option value="complex_3node">Complex 3-Node Network</option>
+                </select>
+                <button id="loadButton">Load Network</button>
+            </div>
+            
+            <div class="network-info">
+                <h3 id="networkName">No Network Loaded</h3>
+                <p id="networkDescription"></p>
+                <h4>Network Configuration:</h4>
+                <pre id="networkConfig">Select a network and click "Load Network"</pre>
+            </div>
+            
+            <div class="simulation-controls">
+                <button id="runButton" disabled>Run Simulation</button>
+                <button id="resetButton" disabled>Reset</button>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="outputChart"></canvas>
+        </div>
+
+        <div class="navigation">
+            <a href="basic-oscillator.html" class="button">Previous Example</a>
+            <a href="../index.html" class="button">Back to Home</a>
+            <!-- <a href="parameter-explorer.html" class="button">Next Example</a> -->
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Mazeballs Contributors. Licensed under the Apache 2.0 License.</p>
+            <p>
+                <a href="https://github.com/danbri/mazeballs">GitHub Repository</a> |
+                <a href="https://www.npmjs.com/package/@mazeballs/ctnet">NPM Package</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Define network configurations
+        const networks = {
+            beer_2node_osc: {
+                name: "Beer 2-Node Oscillator",
+                description: "A classic oscillatory network from Beer (1995) with two nodes",
+                size: 2,
+                weights: [
+                    [4.5, 1.0],
+                    [-1.0, 4.5]
+                ],
+                states: [0.1, 0.5],
+                biases: [-2.75, -1.75],
+                step_size: 0.01,
+                run_duration: 500
+            },
+            oscillatory_4node: {
+                name: "4-Node Oscillator",
+                description: "A more complex oscillatory network with four interacting nodes",
+                size: 4,
+                weights: [
+                    [4.5, 1.0, 0.0, 0.0],
+                    [-1.0, 4.5, 0.0, 0.0],
+                    [0.0, 0.0, 4.5, 1.0],
+                    [0.0, 0.0, -1.0, 4.5]
+                ],
+                states: [0.1, 0.5, 0.3, 0.7],
+                biases: [-2.75, -1.75, -2.25, -1.25],
+                step_size: 0.01,
+                run_duration: 500
+            },
+            complex_3node: {
+                name: "Complex 3-Node Network",
+                description: "A network with rich dynamics from interconnected nodes",
+                size: 3,
+                weights: [
+                    [4.5, 1.0, -0.5],
+                    [-1.0, 4.5, 0.75],
+                    [0.25, -0.8, 3.2]
+                ],
+                states: [0.1, 0.5, 0.3],
+                biases: [-2.75, -1.75, -2.0],
+                step_size: 0.01,
+                run_duration: 500
+            }
+        };
+        
+        // Chart and simulation variables
+        let outputChart;
+        let currentNetwork = null;
+        let simulationData = {
+            labels: [],
+            outputs: []
+        };
+        
+        // Wait for page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize TensorFlow.js
+            await tf.ready();
+            
+            // Initialize WASM backend if available
+            try {
+                await tf.wasm.setWasmPaths(
+                    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                );
+                await tf.setBackend('wasm');
+                console.log('Using WASM backend');
+            } catch (e) {
+                console.log('WASM initialization failed, using default backend');
+            }
+            
+            console.log('Current backend:', tf.getBackend());
+            
+            // Initialize chart
+            const ctx = document.getElementById('outputChart').getContext('2d');
+            outputChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time Steps'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Output Value'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Connect buttons
+            document.getElementById('loadButton').addEventListener('click', loadNetwork);
+            document.getElementById('runButton').addEventListener('click', runSimulation);
+            document.getElementById('resetButton').addEventListener('click', resetSimulation);
+        });
+        
+        // Load selected network
+        function loadNetwork() {
+            const networkId = document.getElementById('networkSelect').value;
+            currentNetwork = networks[networkId];
+            
+            // Update network info
+            document.getElementById('networkName').textContent = currentNetwork.name;
+            document.getElementById('networkDescription').textContent = currentNetwork.description;
+            document.getElementById('networkConfig').textContent = JSON.stringify(currentNetwork, null, 2);
+            
+            // Reset chart
+            resetSimulation();
+            
+            // Initialize chart datasets based on network size
+            outputChart.data.datasets = [];
+            
+            const colors = [
+                'rgb(46, 125, 50)',   // green
+                'rgb(33, 150, 243)',  // blue
+                'rgb(244, 67, 54)',   // red
+                'rgb(255, 193, 7)',   // amber
+                'rgb(156, 39, 176)',  // purple
+                'rgb(0, 188, 212)'    // cyan
+            ];
+            
+            for (let i = 0; i < currentNetwork.size; i++) {
+                outputChart.data.datasets.push({
+                    label: `Node ${i+1}`,
+                    data: [],
+                    borderColor: colors[i % colors.length],
+                    tension: 0.1,
+                    pointRadius: 0
+                });
+            }
+            
+            outputChart.update();
+            
+            // Enable simulation controls
+            document.getElementById('runButton').disabled = false;
+            document.getElementById('resetButton').disabled = false;
+        }
+        
+        // Run simulation
+        async function runSimulation() {
+            if (!currentNetwork) return;
+            
+            // Reset data
+            resetData();
+            
+            // Disable run button
+            document.getElementById('runButton').disabled = true;
+            
+            try {
+                // Create network
+                const net = CTNet({
+                    size: currentNetwork.size,
+                    init_weights: currentNetwork.weights
+                });
+                
+                // Set parameters
+                net.states = tf.tensor1d(currentNetwork.states);
+                net.biases = tf.tensor1d(currentNetwork.biases);
+                net.step_size = currentNetwork.step_size;
+                net.run_duration = currentNetwork.run_duration;
+                
+                // Run simulation
+                let step = 0;
+                
+                for await (const result of net.runSimulation()) {
+                    // Add data to chart
+                    simulationData.labels.push(step);
+                    
+                    // Initialize outputs arrays if needed
+                    if (simulationData.outputs.length === 0) {
+                        for (let i = 0; i < currentNetwork.size; i++) {
+                            simulationData.outputs.push([]);
+                        }
+                    }
+                    
+                    // Add each node's output
+                    for (let i = 0; i < currentNetwork.size; i++) {
+                        simulationData.outputs[i].push(result.outputs_cpu[i]);
+                    }
+                    
+                    // Update chart every few steps
+                    if (step % 5 === 0) {
+                        updateChart();
+                    }
+                    
+                    step++;
+                    
+                    // Break after run_duration steps
+                    if (step >= currentNetwork.run_duration) break;
+                }
+                
+                // Final chart update
+                updateChart();
+                
+            } catch (error) {
+                console.error('Simulation error:', error);
+                alert('Error running simulation. See console for details.');
+            }
+            
+            // Re-enable run button
+            document.getElementById('runButton').disabled = false;
+        }
+        
+        // Reset simulation
+        function resetSimulation() {
+            resetData();
+            updateChart();
+        }
+        
+        // Reset data
+        function resetData() {
+            simulationData = {
+                labels: [],
+                outputs: []
+            };
+        }
+        
+        // Update chart with current data
+        function updateChart() {
+            outputChart.data.labels = simulationData.labels;
+            
+            // Update each dataset
+            for (let i = 0; i < simulationData.outputs.length; i++) {
+                if (i < outputChart.data.datasets.length) {
+                    outputChart.data.datasets[i].data = simulationData.outputs[i];
+                }
+            }
+            
+            outputChart.update();
+        }
+    </script>
+</body>
+</html>

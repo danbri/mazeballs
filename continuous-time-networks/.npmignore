@@ -1,0 +1,36 @@
+# Development files
+.git
+.github
+.gitignore
+.npmignore
+.npmrc
+.vscode
+.idea
+*.log
+*.tgz
+
+# Test and example files (we only want to include specifically chosen examples)
+tests/
+examples/browser
+examples/node
+
+# Build configuration
+rollup.config.js
+jest.config.js
+*.tsbuildinfo
+
+# Documentation that's not needed in the package
+CONTRIBUTING.md
+CHANGELOG.md
+CLAUDE.md
+
+# Dependencies
+node_modules/
+
+# Only include necessary demo files
+demos/*
+\!demos/README.md
+
+# OS specific
+.DS_Store
+Thumbs.db

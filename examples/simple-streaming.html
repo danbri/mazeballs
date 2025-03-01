@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Streaming Oscillator - CTNet Examples</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <!-- Only load TensorFlow.js and Chart.js initially -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+    <!-- CTNet will be loaded dynamically AFTER TensorFlow is initialized -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            height: 350px;
+            margin: 20px 0;
+        }
+        .control-panel {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .control-column {
+            flex: 1;
+            min-width: 250px;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+        }
+        .stats-panel {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stat-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        .stat-label {
+            flex: 1;
+            font-weight: bold;
+        }
+        .stat-value {
+            flex: 1;
+            text-align: right;
+        }
+        .memory-bar {
+            height: 20px;
+            background-color: #ddd;
+            border-radius: 10px;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+        .memory-fill {
+            height: 100%;
+            background-color: #4caf50;
+            width: 0%;
+            transition: width 0.5s ease-in-out;
+        }
+        .streaming-toggle {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .streaming-toggle.active {
+            background-color: #f44336;
+        }
+        .window-size-control {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Simple Streaming Oscillator</h1>
+            <p class="tagline">Real-time visualization with sliding window</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <p>
+            This example demonstrates a streaming oscillator network with real-time visualization.
+            Unlike the basic oscillator, this demo continuously runs and shows a sliding window
+            of the most recent network activity.
+        </p>
+
+        <div class="stats-panel">
+            <h3>Status</h3>
+            <div class="stat-row">
+                <div class="stat-label">Backend:</div>
+                <div class="stat-value" id="backendType">Loading...</div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-label">Data Points:</div>
+                <div class="stat-value" id="dataPoints">0</div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-label">Memory Used:</div>
+                <div class="stat-value" id="memoryUsed">0 MB</div>
+            </div>
+            <div class="memory-bar">
+                <div class="memory-fill" id="memoryFill"></div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="control-column">
+                <div class="control-group">
+                    <label for="stepSize">Step Size:</label>
+                    <input type="range" id="stepSize" min="0.001" max="0.1" step="0.001" value="0.01">
+                    <span id="stepSizeValue">0.01</span>
+                </div>
+                <div class="control-group">
+                    <label for="initialState1">Initial State 1:</label>
+                    <input type="range" id="initialState1" min="0" max="1" step="0.01" value="0.1">
+                    <span id="initialState1Value">0.1</span>
+                </div>
+                <div class="control-group">
+                    <label for="initialState2">Initial State 2:</label>
+                    <input type="range" id="initialState2" min="0" max="1" step="0.01" value="0.5">
+                    <span id="initialState2Value">0.5</span>
+                </div>
+            </div>
+            <div class="control-column">
+                <div class="control-group">
+                    <label for="bias1">Bias 1:</label>
+                    <input type="range" id="bias1" min="-5" max="5" step="0.05" value="-2.75">
+                    <span id="bias1Value">-2.75</span>
+                </div>
+                <div class="control-group">
+                    <label for="bias2">Bias 2:</label>
+                    <input type="range" id="bias2" min="-5" max="5" step="0.05" value="-1.75">
+                    <span id="bias2Value">-1.75</span>
+                </div>
+                <div class="window-size-control">
+                    <label for="windowSize">Display Window:</label>
+                    <input type="range" id="windowSize" min="50" max="500" step="50" value="200">
+                    <span id="windowSizeValue">200</span> steps
+                </div>
+            </div>
+            <div class="control-column">
+                <button id="streamToggle" class="streaming-toggle">Start Streaming</button>
+                <p id="streamStatus">Streaming is off</p>
+                <button id="resetButton">Reset Data</button>
+                <div class="control-group">
+                    <label for="maxDataPoints">Max Data Points:</label>
+                    <input type="number" id="maxDataPoints" min="1000" max="10000" step="1000" value="5000">
+                </div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="outputChart"></canvas>
+        </div>
+
+        <div class="navigation">
+            <a href="../index.html" class="button">Back to Home</a>
+            <a href="basic-oscillator.html" class="button">Basic Oscillator</a>
+            <a href="network-loader.html" class="button">Network Loader</a>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Mazeballs Contributors. Licensed under the Apache 2.0 License.</p>
+            <p>
+                <a href="https://github.com/danbri/mazeballs">GitHub Repository</a> |
+                <a href="https://www.npmjs.com/package/@mazeballs/ctnet">NPM Package</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize variables
+        let outputChart;
+        let simulationData = {
+            labels: [],
+            node1: [],
+            node2: []
+        };
+        let isStreaming = false;
+        let streamingTask = null;
+        let currentNet = null;
+        let windowSize = 200;
+        let maxDataPoints = 5000;
+        
+        // Helper to dynamically load scripts
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+        
+        // Global variable for CTNet
+        let CTNet;
+        
+        // Wait for page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('DOM loaded, initializing TensorFlow.js...');
+            
+            // STEP 1: Initialize TensorFlow.js FIRST
+            await tf.ready();
+            console.log('TensorFlow.js initialized');
+            
+            // STEP 2: Initialize WASM backend
+            try {
+                await tf.wasm.setWasmPaths(
+                    'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/'
+                );
+                await tf.setBackend('wasm');
+                console.log('Using WASM backend');
+            } catch (e) {
+                console.log('WASM initialization failed, using default backend:', e.message);
+            }
+            
+            // Log the current backend
+            console.log('Current backend:', tf.getBackend());
+            document.getElementById('backendType').textContent = tf.getBackend();
+            
+            // STEP 3: Load CTNet library AFTER TensorFlow.js is initialized
+            console.log('Loading CTNet library...');
+            try {
+                await loadScript('../js/ctnet.min.js');
+                console.log('CTNet library loaded');
+                
+                // Set global CTNet reference
+                if (window.CTNet && window.CTNet.CTNet) {
+                    CTNet = window.CTNet.CTNet;
+                } else if (typeof CTNet === "undefined" && window.ctnet) {
+                    CTNet = window.ctnet;
+                } else {
+                    CTNet = window.CTNet;
+                }
+                
+                if (!CTNet) {
+                    throw new Error("Could not find CTNet constructor");
+                }
+                
+                console.log('CTNet initialized successfully');
+            } catch (error) {
+                console.error('Failed to load CTNet:', error);
+                alert('Error loading CTNet library: ' + error.message);
+                document.getElementById('backendType').textContent = 'Error';
+                return;
+            }
+            
+            // Initialize chart
+            const ctx = document.getElementById('outputChart').getContext('2d');
+            outputChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Node 1',
+                            data: [],
+                            borderColor: 'rgb(46, 125, 50)',
+                            tension: 0.1,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Node 2',
+                            data: [],
+                            borderColor: 'rgb(33, 150, 243)',
+                            tension: 0.1,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 0 // Disable animations for better performance
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time Steps'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Output Value'
+                            },
+                            min: 0,
+                            max: 1
+                        }
+                    }
+                }
+            });
+            
+            // Connect UI controls
+            setupUIControls();
+            
+            // Start memory monitoring
+            setInterval(updateMemoryStats, 1000);
+        });
+        
+        // Connect UI controls
+        function setupUIControls() {
+            // Stream toggle button
+            const streamToggle = document.getElementById('streamToggle');
+            streamToggle.addEventListener('click', function() {
+                if (isStreaming) {
+                    stopStreaming();
+                } else {
+                    startStreaming();
+                }
+            });
+            
+            // Reset button
+            document.getElementById('resetButton').addEventListener('click', resetSimulation);
+            
+            // Window size slider
+            const windowSizeSlider = document.getElementById('windowSize');
+            const windowSizeValue = document.getElementById('windowSizeValue');
+            windowSizeSlider.addEventListener('input', function() {
+                windowSize = parseInt(this.value);
+                windowSizeValue.textContent = windowSize;
+                updateChart();
+            });
+            
+            // Max data points
+            document.getElementById('maxDataPoints').addEventListener('change', function() {
+                maxDataPoints = parseInt(this.value);
+                trimExcessData();
+            });
+            
+            // Parameter sliders
+            setupSlider('stepSize', 'stepSizeValue');
+            setupSlider('initialState1', 'initialState1Value');
+            setupSlider('initialState2', 'initialState2Value');
+            setupSlider('bias1', 'bias1Value');
+            setupSlider('bias2', 'bias2Value');
+        }
+        
+        // Helper for setting up sliders
+        function setupSlider(sliderId, valueId) {
+            const slider = document.getElementById(sliderId);
+            const valueElement = document.getElementById(valueId);
+            slider.addEventListener('input', function() {
+                valueElement.textContent = this.value;
+                
+                // Reset the simulation if we're already streaming
+                if (isStreaming) {
+                    resetAndRestart();
+                }
+            });
+        }
+        
+        // Start streaming simulation - based on the working basic-oscillator.html
+        async function startStreaming() {
+            if (isStreaming) return;
+            
+            // Update UI
+            isStreaming = true;
+            document.getElementById('streamToggle').textContent = 'Stop Streaming';
+            document.getElementById('streamToggle').classList.add('active');
+            document.getElementById('streamStatus').textContent = 'Streaming is active';
+            
+            // Reset data
+            resetData();
+            
+            // Get parameters from controls - same as in working demos
+            const stepSize = parseFloat(document.getElementById('stepSize').value);
+            const initialState1 = parseFloat(document.getElementById('initialState1').value);
+            const initialState2 = parseFloat(document.getElementById('initialState2').value);
+            const bias1 = parseFloat(document.getElementById('bias1').value);
+            const bias2 = parseFloat(document.getElementById('bias2').value);
+            
+            try {
+                // Create network - same as in working demos
+                const net = CTNet({
+                    size: 2,
+                    init_weights: [
+                        [4.5, 1.0],
+                        [-1.0, 4.5]
+                    ]
+                });
+                
+                // Set parameters - same as in working demos
+                net.states = tf.tensor1d([initialState1, initialState2]);
+                net.biases = tf.tensor1d([bias1, bias2]);
+                net.step_size = stepSize;
+                
+                // Use larger run_duration to avoid generator reinitialization issues
+                net.run_duration = 5000; // Run a single generator for much longer
+                
+                // Save the network for later access
+                currentNet = net;
+                
+                // Start a step counter
+                let step = 0;
+                
+                // Function to run a segment of the simulation
+                async function runSegment() {
+                    if (!isStreaming) return;
+                    
+                    try {
+                        // Run a short segment of simulation
+                        for await (const result of currentNet.runSimulation()) {
+                            // Add data to chart
+                            simulationData.labels.push(step);
+                            simulationData.node1.push(result.outputs_cpu[0]);
+                            simulationData.node2.push(result.outputs_cpu[1]);
+                            
+                            step++;
+                            
+                            // Update counter
+                            document.getElementById('dataPoints').textContent = step;
+                        }
+                        
+                        // Trim excess data if needed
+                        trimExcessData();
+                        
+                        // Update chart
+                        updateChart();
+                        
+                        // Schedule next segment if still streaming
+                        if (isStreaming) {
+                            streamingTask = setTimeout(runSegment, 10);
+                        }
+                    } catch (error) {
+                        console.error('Simulation error:', error);
+                        stopStreaming();
+                        alert('Error running simulation: ' + error.message);
+                    }
+                }
+                
+                // Start running segments
+                runSegment();
+                
+            } catch (error) {
+                console.error('Setup error:', error);
+                stopStreaming();
+                alert('Error setting up simulation: ' + error.message);
+            }
+        }
+        
+        // Stop streaming simulation
+        function stopStreaming() {
+            isStreaming = false;
+            document.getElementById('streamToggle').textContent = 'Start Streaming';
+            document.getElementById('streamToggle').classList.remove('active');
+            document.getElementById('streamStatus').textContent = 'Streaming is paused';
+            
+            if (streamingTask) {
+                clearTimeout(streamingTask);
+                streamingTask = null;
+            }
+        }
+        
+        // Reset simulation
+        function resetSimulation() {
+            // Stop streaming if active
+            if (isStreaming) {
+                stopStreaming();
+            }
+            
+            // Reset data
+            resetData();
+            
+            // Update chart
+            updateChart();
+        }
+        
+        // Reset and restart
+        function resetAndRestart() {
+            stopStreaming();
+            resetData();
+            setTimeout(startStreaming, 100); // Small delay to ensure cleanup
+        }
+        
+        // Reset data arrays
+        function resetData() {
+            simulationData = {
+                labels: [],
+                node1: [],
+                node2: []
+            };
+        }
+        
+        // Trim excess data to prevent memory issues
+        function trimExcessData() {
+            const dataLength = simulationData.labels.length;
+            
+            if (dataLength > maxDataPoints) {
+                const trimCount = dataLength - maxDataPoints;
+                simulationData.labels = simulationData.labels.slice(trimCount);
+                simulationData.node1 = simulationData.node1.slice(trimCount);
+                simulationData.node2 = simulationData.node2.slice(trimCount);
+            }
+        }
+        
+        // Update chart with current data - using sliding window
+        function updateChart() {
+            const dataLength = simulationData.labels.length;
+            
+            // If we have more data than the window size, only show the window
+            if (dataLength > windowSize) {
+                const startIdx = dataLength - windowSize;
+                outputChart.data.labels = simulationData.labels.slice(startIdx);
+                outputChart.data.datasets[0].data = simulationData.node1.slice(startIdx);
+                outputChart.data.datasets[1].data = simulationData.node2.slice(startIdx);
+            } else {
+                outputChart.data.labels = simulationData.labels;
+                outputChart.data.datasets[0].data = simulationData.node1;
+                outputChart.data.datasets[1].data = simulationData.node2;
+            }
+            
+            outputChart.update();
+        }
+        
+        // Update memory statistics with detailed GPU info
+        function updateMemoryStats() {
+            try {
+                // Get memory info if possible
+                if (tf.engine && tf.engine().memory) {
+                    const memoryInfo = tf.engine().memory();
+                    
+                    // Convert bytes to MB
+                    const bytesToMB = 1 / (1024 * 1024);
+                    const memoryUsed = Math.round(memoryInfo.numBytes * bytesToMB);
+                    
+                    // Get more detailed memory info if available
+                    let memoryDetails = '';
+                    
+                    // For WebGL/GPU backends
+                    if (tf.getBackend() === 'webgl' && memoryInfo.numBytesInGPU !== undefined) {
+                        const gpuMemUsed = Math.round(memoryInfo.numBytesInGPU * bytesToMB);
+                        memoryDetails = ` (GPU: ${gpuMemUsed} MB)`;
+                    }
+                    
+                    // For all backends, show tensor count
+                    const tensorCount = tf.memory().numTensors;
+                    memoryDetails += ` [${tensorCount} tensors]`;
+                    
+                    // Update display
+                    document.getElementById('memoryUsed').textContent = memoryUsed + ' MB' + memoryDetails;
+                    
+                    // Try to get unreleased tensors
+                    let unreleased = 0;
+                    if (memoryInfo.unreliable) {
+                        unreleased = memoryInfo.numTensors - memoryInfo.numDataBuffers;
+                        console.log(`Possible unreleased tensors: ${unreleased}`);
+                    }
+                    
+                    // Update bar (assuming 1GB max)
+                    const memoryPercent = (memoryUsed / 1000) * 100;
+                    document.getElementById('memoryFill').style.width = memoryPercent + '%';
+                    
+                    // Change color based on usage
+                    if (memoryPercent > 80 || unreleased > 50) {
+                        document.getElementById('memoryFill').style.backgroundColor = '#f44336'; // Red
+                    } else if (memoryPercent > 60 || unreleased > 20) {
+                        document.getElementById('memoryFill').style.backgroundColor = '#ff9800'; // Orange
+                    } else {
+                        document.getElementById('memoryFill').style.backgroundColor = '#4caf50'; // Green
+                    }
+                    
+                    // Log memory usage periodically to monitor for leaks
+                    if (totalSteps % 100 === 0) {
+                        console.log(`Memory at step ${totalSteps}: ${memoryUsed}MB, Tensors: ${tensorCount}`);
+                    }
+                }
+            } catch (e) {
+                console.warn('Error checking memory:', e);
+            }
+        }
+    </script>
+</body>
+</html>

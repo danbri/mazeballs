@@ -1,0 +1,66 @@
+name: Deploy CTNet Documentation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: continuous-time-networks
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: npm install
+          
+      - name: Build library
+        run: npm run build
+        
+      - name: Build documentation site
+        run: |
+          # Prepare directories
+          npm run docs:prepare
+          
+          # Copy demos/examples
+          npm run docs:copy-demos
+          
+          # Copy library files
+          npm run docs:copy-lib
+          
+          # Copy network examples
+          npm run docs:copy-networks
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'continuous-time-networks/docs'
+          
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

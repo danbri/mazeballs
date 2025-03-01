@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTNet - JavaScript Library for Continuous-Time Networks</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>CTNet</h1>
+            <p class="tagline">A JavaScript library for simulating continuous-time dynamical networks</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="about">
+            <h2>About CTNet</h2>
+            <p>
+                CTNet is a specialized library for simulating Continuous-Time Recurrent Neural Networks (CTRNNs)
+                and other dynamical systems. Built on TensorFlow.js, it provides high-performance computation
+                with support for multiple backends (CPU, WebGL, WASM).
+            </p>
+            <p>
+                <strong>Latest version:</strong> 0.1.4 - Now available on npm as <code>@mazeballs/ctnet</code>!
+            </p>
+        </section>
+
+        <section id="features">
+            <h2>Features</h2>
+            <ul>
+                <li>Fast simulation using TensorFlow.js</li>
+                <li>Multiple backend support (CPU, WebGL, WASM)</li>
+                <li>Browser and Node.js compatibility</li>
+                <li>Async generator-based API for streaming results</li>
+                <li>Built-in oscillator examples</li>
+            </ul>
+        </section>
+
+        <section id="installation">
+            <h2>Installation</h2>
+            <div class="code-block">
+                <pre><code>npm install @mazeballs/ctnet</code></pre>
+            </div>
+            <p>Or include it directly in your HTML:</p>
+            <div class="code-block">
+                <pre><code>&lt;script src="https://cdn.jsdelivr.net/npm/@mazeballs/ctnet/dist/ctnet.min.js"&gt;&lt;/script&gt;</code></pre>
+            </div>
+        </section>
+
+        <section id="quick-start">
+            <h2>Quick Start</h2>
+            <div class="code-block">
+                <pre><code>// Import TensorFlow.js first
+const tf = require('@tensorflow/tfjs');
+
+async function main() {
+  // Initialize TensorFlow.js
+  await tf.ready();
+  
+  // Initialize WASM backend
+  try {
+    const tfwasm = require('@tensorflow/tfjs-backend-wasm');
+    const wasmPath = require.resolve('@tensorflow/tfjs-backend-wasm/dist/tfjs-backend-wasm.wasm');
+    const wasmDir = wasmPath.substring(0, wasmPath.lastIndexOf('/') + 1);
+    await tfwasm.setWasmPaths(wasmDir);
+    await tf.setBackend('wasm');
+  } catch (e) {
+    await tf.setBackend('cpu');
+  }
+  
+  // Import library AFTER initialization
+  const { CTNet } = require('@mazeballs/ctnet');
+  
+  // Create a two-node oscillator
+  const net = CTNet({
+    size: 2,
+    init_weights: [
+      [4.5, 1],
+      [-1, 4.5]
+    ]
+  });
+  
+  // Configure the network
+  net.states = tf.tensor1d([0.1, 0.5]);
+  net.biases = tf.tensor1d([-2.75, -1.75]);
+  net.step_size = 0.01;
+  net.run_duration = 1000;
+  
+  // Run simulation
+  for await (const result of net.runSimulation()) {
+    console.log(result.outputs_cpu);
+  }
+}
+
+main();</code></pre>
+            </div>
+        </section>
+
+        <section id="examples">
+            <h2>Examples</h2>
+            <div class="cards">
+                <div class="card">
+                    <h3>Basic Oscillator</h3>
+                    <p>A simple two-node oscillator demonstration</p>
+                    <a href="examples/basic-oscillator.html" class="button">View Example</a>
+                </div>
+                <div class="card">
+                    <h3>Network Loader</h3>
+                    <p>Load different network configurations</p>
+                    <a href="examples/network-loader.html" class="button">View Example</a>
+                </div>
+                <div class="card">
+                    <h3>Simple Streaming</h3>
+                    <p>Real-time visualization with sliding window</p>
+                    <a href="examples/simple-streaming.html" class="button">View Example</a>
+                </div>
+                <!-- Disabled until implemented
+                <div class="card">
+                    <h3>Parameter Explorer</h3>
+                    <p>Explore how parameters affect network behavior</p>
+                    <a href="examples/parameter-explorer.html" class="button">View Example</a>
+                </div>
+                -->
+            </div>
+        </section>
+
+        <section id="documentation">
+            <h2>Documentation</h2>
+            <p>
+                Comprehensive documentation is available in the <a href="api/index.html">API Reference</a>.
+                Check out the <a href="https://github.com/danbri/mazeballs/tree/main/continuous-time-networks/examples">examples directory</a>
+                for more usage examples.
+            </p>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Mazeballs Contributors. Licensed under the Apache 2.0 License.</p>
+            <p>
+                <a href="https://github.com/danbri/mazeballs">GitHub Repository</a> |
+                <a href="https://www.npmjs.com/package/@mazeballs/ctnet">NPM Package</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
