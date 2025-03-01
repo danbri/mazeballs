@@ -1,0 +1,12 @@
+{
+    "size": 3,
+    "init_weights": [
+        [4.5, 1, 0.1],
+        [-1, 4.5, 0],
+        [1.1, 0.3, 1]
+    ],
+    "init_states": [2, 3, 100],
+    "init_biases": [-2.75, -1.75, 0],
+    "init_taus": [1, 1.1, 5],
+    "name": "Simple 3-Node."
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Beer 1995 two-node oscillator",
+  "description": "Classic two-node oscillator from Beer (1995)",
+  "size": 2,
+  "taus": [1, 1],
+  "biases": [-2.75, -2.75],
+  "weights": [
+    [4.5, 1],
+    [1, 4.5]
+  ],
+  "gains": [1, 1],
+  "step_size": 0.01,
+  "reference": "Beer, R. D. (1995). On the dynamics of small continuous-time recurrent neural networks. Adaptive Behavior, 3(4), 469-509."
+}
