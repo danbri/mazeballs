@@ -188,7 +188,7 @@ describe('ctNet', function() {
       
       // Verify results
       assert(results.length > 0, 'Simulation should produce results');
-      assert(results.length <= net.run_duration, 'Simulation should not exceed run_duration');
+      assert.strictEqual(results.length, net.run_duration, 'Simulation should run for the full run_duration');
       
       // Check for oscillatory behavior by examining several points
       // We don't check exact values, since those can vary, but we check that values change
