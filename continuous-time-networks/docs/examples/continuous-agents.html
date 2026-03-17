@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous 2D CTRNN Agents</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.1.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.1.0/dist/tf-backend-wasm.min.js"></script>
+    <script src="../js/ctnet.js"></script>
+    <style>
+        .sim-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+        .panel { background: #f5f5f5; border: 1px solid #d9d9d9; border-radius: 8px; padding: 16px; }
+        .control-group { margin-bottom: 12px; }
+        .control-group label { display: block; font-weight: 600; margin-bottom: 4px; }
+        .control-group input[type="range"] { width: 100%; }
+        .mono { font-family: Consolas, monospace; font-size: 0.9rem; }
+        #world { width: 100%; height: auto; border: 1px solid #d0d0d0; border-radius: 8px; background: #111; }
+        .actions { display: flex; gap: 8px; }
+        @media (max-width: 900px) { .sim-layout { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<header>
+    <div class="container">
+        <h1>Little CTRNN Agents in Continuous 2D</h1>
+        <p class="tagline">A live swarm demo where each dot is driven by its own tiny continuous-time recurrent neural network.</p>
+    </div>
+</header>
+
+<main class="container">
+    <p>
+        Each agent has a 2-neuron CTRNN. The two network outputs are interpreted as an acceleration vector, producing smooth,
+        continuous movement in a 2D world.
+    </p>
+
+    <div class="sim-layout">
+        <aside class="panel">
+            <div class="control-group">
+                <label for="agentCount">Agent count: <span id="agentCountValue">40</span></label>
+                <input id="agentCount" type="range" min="5" max="120" step="1" value="40">
+            </div>
+            <div class="control-group">
+                <label for="stepSize">CTRNN step size: <span id="stepSizeValue">0.05</span></label>
+                <input id="stepSize" type="range" min="0.01" max="0.2" step="0.01" value="0.05">
+            </div>
+            <div class="control-group">
+                <label for="drive">Motor drive: <span id="driveValue">0.6</span></label>
+                <input id="drive" type="range" min="0.1" max="1.2" step="0.05" value="0.6">
+            </div>
+            <div class="actions">
+                <button id="respawn" class="button">Respawn</button>
+                <button id="toggle" class="button">Pause</button>
+            </div>
+            <p class="mono" id="status">Initializing TensorFlow...</p>
+        </aside>
+
+        <section>
+            <canvas id="world" width="960" height="560"></canvas>
+        </section>
+    </div>
+
+    <div class="navigation" style="margin-top: 1rem;">
+        <a href="../index.html" class="button">Back to Home</a>
+    </div>
+</main>
+
+<script>
+(async function () {
+    await tf.ready();
+    try {
+        await tf.wasm.setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm/dist/');
+        await tf.setBackend('wasm');
+    } catch (_) {}
+
+    const canvas = document.getElementById('world');
+    const ctx = canvas.getContext('2d');
+
+    const controls = {
+        count: document.getElementById('agentCount'),
+        countValue: document.getElementById('agentCountValue'),
+        step: document.getElementById('stepSize'),
+        stepValue: document.getElementById('stepSizeValue'),
+        drive: document.getElementById('drive'),
+        driveValue: document.getElementById('driveValue'),
+        respawn: document.getElementById('respawn'),
+        toggle: document.getElementById('toggle'),
+        status: document.getElementById('status')
+    };
+
+    let running = true;
+    let agents = [];
+
+    function rand(min, max) { return min + (max - min) * Math.random(); }
+
+    function makeAgent() {
+        const net = CTNet({
+            size: 2,
+            step_size: parseFloat(controls.step.value),
+            init_weights: [
+                [rand(3.5, 5.5), rand(-2, 2)],
+                [rand(-2, 2), rand(3.5, 5.5)]
+            ]
+        });
+
+        net.states = tf.tensor1d([rand(-1, 1), rand(-1, 1)]);
+        net.biases = tf.tensor1d([rand(-3.2, -1.0), rand(-3.2, -1.0)]);
+        net.gains = tf.tensor1d([1.0, 1.0]);
+        net.outputs = tf.sigmoid(net.states.add(net.biases));
+
+        return {
+            net,
+            x: rand(0, canvas.width),
+            y: rand(0, canvas.height),
+            vx: rand(-0.6, 0.6),
+            vy: rand(-0.6, 0.6),
+            color: `hsl(${Math.floor(rand(0, 360))} 85% 60%)`
+        };
+    }
+
+    function resetAgents() {
+        for (const a of agents) {
+            a.net.states?.dispose?.();
+            a.net.outputs?.dispose?.();
+            a.net.weights?.dispose?.();
+            a.net.biases?.dispose?.();
+            a.net.gains?.dispose?.();
+        }
+        agents = Array.from({ length: parseInt(controls.count.value, 10) }, makeAgent);
+    }
+
+    async function stepAgent(agent) {
+        agent.net.step_size = parseFloat(controls.step.value);
+        const calc = await agent.net.eulerStep(agent.net, agent.net.states, agent.net.outputs);
+
+        agent.net.states = calc.states;
+        agent.net.outputs?.dispose?.();
+        agent.net.outputs = calc.outputs;
+        calc.yprime?.dispose?.();
+
+        const [o1, o2] = calc.outputs_cpu;
+        const drive = parseFloat(controls.drive.value);
+        const ax = (o1 - 0.5) * drive;
+        const ay = (o2 - 0.5) * drive;
+
+        agent.vx = (agent.vx + ax) * 0.98;
+        agent.vy = (agent.vy + ay) * 0.98;
+        agent.x += agent.vx;
+        agent.y += agent.vy;
+
+        if (agent.x < 0 || agent.x > canvas.width) agent.vx *= -1;
+        if (agent.y < 0 || agent.y > canvas.height) agent.vy *= -1;
+
+        agent.x = Math.max(0, Math.min(canvas.width, agent.x));
+        agent.y = Math.max(0, Math.min(canvas.height, agent.y));
+    }
+
+    function draw() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (const agent of agents) {
+            ctx.fillStyle = agent.color;
+            ctx.beginPath();
+            ctx.arc(agent.x, agent.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    async function animate() {
+        if (running) {
+            for (const agent of agents) {
+                await stepAgent(agent);
+            }
+            draw();
+        }
+        requestAnimationFrame(animate);
+    }
+
+    controls.count.addEventListener('input', () => controls.countValue.textContent = controls.count.value);
+    controls.step.addEventListener('input', () => controls.stepValue.textContent = controls.step.value);
+    controls.drive.addEventListener('input', () => controls.driveValue.textContent = controls.drive.value);
+
+    controls.respawn.addEventListener('click', resetAgents);
+    controls.toggle.addEventListener('click', () => {
+        running = !running;
+        controls.toggle.textContent = running ? 'Pause' : 'Resume';
+    });
+
+    controls.count.dispatchEvent(new Event('input'));
+    controls.step.dispatchEvent(new Event('input'));
+    controls.drive.dispatchEvent(new Event('input'));
+
+    resetAgents();
+    controls.status.textContent = `Backend: ${tf.getBackend()} | ${agents.length} agents running`;
+    animate();
+})();
+</script>
+</body>
+</html>
